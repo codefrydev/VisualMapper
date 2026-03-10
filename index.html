@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Mapper BFF</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Elegant Scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .dark-scroll::-webkit-scrollbar-thumb { background: #475569; }
+        .dark-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        /* JSON Viewers */
+        .json-viewer { font-size: 0.8rem; line-height: 1.5; }
+        
+        /* Light Theme Syntax Highlighting (Left Panel) */
+        .light-theme .string { color: #a31515; }
+        .light-theme .number { color: #098658; }
+        .light-theme .boolean, .light-theme .null { color: #0000ff; font-weight: 500; }
+        .light-theme .key { color: #0451a5; font-weight: 500; }
+
+        /* Dark Theme Syntax Highlighting (Right Panel) */
+        .dark-theme .string { color: #ce9178; }
+        .dark-theme .number { color: #b5cea8; }
+        .dark-theme .boolean, .dark-theme .null { color: #569cd6; font-weight: 500; }
+        .dark-theme .key { color: #9cdcfe; font-weight: 500; }
+
+        /* Canvas Grid Background */
+        .canvas-bg {
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* Node Cards */
+        .node-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 10;
+        }
+        .node-card:hover {
+            border-color: #94a3b8;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+            transform: translateY(-1px);
+        }
+        .node-card.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        .node-card.connected {
+            border-color: #10b981;
+        }
+
+        /* Connection Ports */
+        .port {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid #cbd5e1;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: all 0.2s;
+            z-index: 20;
+        }
+        .node-card:hover .port { border-color: #94a3b8; }
+        .node-card.selected .port { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .node-card.connected .port { border-color: #10b981; background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
+        
+        .source-node .port { right: -6px; }
+        .target-node .port { left: -6px; }
+    </style>
+</head>
+<body class="bg-slate-50 h-screen flex flex-col overflow-hidden text-slate-800">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center shadow-sm z-20">
+        
+        <!-- Left Section -->
+        <div class="flex items-center gap-4">
+            <button onclick="togglePanel('source')" id="btn-toggle-source" class="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors" title="Toggle Source Panel">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+            </button>
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-1.5 rounded-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h10"/></svg>
+                </div>
+                <h1 class="text-[17px] font-semibold text-slate-800 tracking-tight">Visual Mapper BFF</h1>
+            </div>
+        </div>
+
+        <!-- Center Section: Tabs -->
+        <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200/60 shadow-inner">
+            <button id="tab-visual" class="px-5 py-1.5 text-sm font-medium rounded-md bg-white shadow shadow-slate-200 text-blue-600 transition-all" onclick="switchTab('visual')">Visual Mapper</button>
+            <button id="tab-code" class="px-5 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all" onclick="switchTab('code')">Code Editor</button>
+        </div>
+
+        <!-- Right Section -->
+        <div class="flex items-center gap-4">
+            <button onclick="togglePanel('target')" id="btn-toggle-target" class="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors" title="Toggle Output Panel">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Panel: Source JSON -->
+        <!-- Added min-w, transition classes, and an inner wrapper to prevent text squishing -->
+        <section id="panel-source" class="w-[28%] min-w-[280px] transition-all duration-300 ease-in-out bg-[#fafafa] border-r border-slate-200 flex flex-col z-10 shadow-[2px_0_8px_rgba(0,0,0,0.02)] overflow-hidden shrink-0">
+            <div class="w-[28vw] min-w-[320px] h-full flex flex-col">
+                <div class="px-5 py-3 border-b border-slate-200 bg-white flex justify-between items-center shrink-0">
+                    <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Source (Domain API)</h2>
+                    <button onclick="editSource()" id="btn-edit-source" class="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                        Edit JSON
+                    </button>
+                </div>
+                <div id="source-view-container" class="p-5 overflow-y-auto flex-1">
+                    <pre id="source-json-view" class="json-viewer light-theme font-mono text-slate-700 whitespace-pre-wrap break-all"></pre>
+                </div>
+                <!-- Hidden Edit Mode Container -->
+                <div id="source-edit-container" class="hidden flex-1 flex flex-col bg-slate-50">
+                    <textarea id="source-json-edit" class="flex-1 w-full p-5 bg-transparent text-slate-700 font-mono text-[12px] leading-relaxed resize-none focus:outline-none focus:ring-inset focus:ring-2 focus:ring-blue-500/20" spellcheck="false"></textarea>
+                    <div class="p-3 border-t border-slate-200 bg-white flex justify-end gap-2 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]">
+                        <button onclick="cancelEditSource()" class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors">Cancel</button>
+                        <button onclick="saveEditSource()" class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm transition-colors flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            Save & Update Paths
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Center Panel: Mapping Area -->
+        <section class="flex-1 bg-white flex flex-col relative z-0 min-w-[400px]">
+            
+            <!-- Code Tab -->
+            <div id="view-code" class="hidden flex-1 flex flex-col h-full relative">
+                <div class="px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center">
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-800">Transformation Script</h3>
+                        <p class="text-xs text-slate-500">Map the global <code class="bg-slate-100 px-1 rounded text-slate-700 font-mono">sourceData</code> object.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <!-- NEW: Sync to Visual Button -->
+                        <button onclick="syncCodeToVisual()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold transition-colors shadow-sm flex items-center gap-1.5" title="Extract visual mappings from this code">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+                            Sync to Visual
+                        </button>
+                        <button onclick="executeCodeMapping()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Execute Map
+                        </button>
+                    </div>
+                </div>
+                <textarea id="code-editor" class="flex-1 w-full p-6 bg-[#0f172a] text-[#e2e8f0] font-mono text-[13px] leading-relaxed resize-none focus:outline-none" spellcheck="false">
+function mapData(backendData) {
+  const trip = backendData.bookingPlatform.trip;
+  const traveler = trip.travelers[0];
+  const flight = trip.itinerary.flights[0];
+  const hotel = trip.itinerary.hotels[0];
+
+  return {
+    tripId: trip.tripId,
+    status: trip.status,
+    purpose: trip.purpose,
+    summary: {
+      destinationCity: flight.arrival.city,
+      startDate: hotel.stay.checkIn,
+      endDate: hotel.stay.checkOut,
+      totalPrice: {
+        amount: trip.pricing.total,
+        currency: trip.pricing.currency
+      }
+    },
+    traveler: {
+      id: traveler.travelerId,
+      name: traveler.profile.name,
+      department: traveler.profile.department
+    },
+    quickActions: [
+      { action: "view_ticket", label: "View Flight Ticket" },
+      { action: "contact_support", label: "Contact Support" }
+    ],
+    lastUpdated: backendData.bookingPlatform.generatedAt
+  };
+}
+
+return mapData(sourceData);
+</textarea>
+            </div>
+
+            <!-- Visual Tab -->
+            <div id="view-visual" class="flex-1 flex flex-col h-full relative">
+                <div class="px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center z-10 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-800">Data Wiring</h3>
+                        <p class="text-[11px] text-slate-500 mt-0.5">Connect source nodes to target schema definitions.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="clearConnections()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold transition-colors shadow-sm">
+                            Clear
+                        </button>
+                        <button onclick="executeVisualMapping()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/></svg>
+                            Apply Map
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Wiring Canvas -->
+                <div class="flex-1 relative overflow-hidden flex canvas-bg" id="visual-canvas-container">
+                    <!-- SVG Overlay for lines -->
+                    <svg id="svg-canvas" class="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+                        <defs>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.15" flood-color="#10b981"/>
+                            </filter>
+                        </defs>
+                    </svg>
+                    
+                    <!-- Source Column -->
+                    <div class="w-1/2 h-full overflow-y-auto px-8 py-6 relative z-10" onscroll="drawLines()">
+                        <div class="flex items-center gap-2 mb-4 sticky top-0 bg-[#f8fafc]/90 backdrop-blur-sm py-2 z-20 border-b border-slate-200/50">
+                            <div class="w-2 h-2 rounded-full bg-slate-400"></div>
+                            <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Source Paths</h4>
+                        </div>
+                        <div id="source-nodes" class="space-y-3 pb-8">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Visual separator line in middle -->
+                    <div class="absolute left-1/2 top-0 bottom-0 w-px bg-slate-200/60 border-r border-dashed border-slate-300 z-0"></div>
+
+                    <!-- Target Column -->
+                    <div class="w-1/2 h-full overflow-y-auto px-8 py-6 relative z-10" onscroll="drawLines()">
+                        <div class="sticky top-0 bg-[#f8fafc]/90 backdrop-blur-sm pt-2 pb-3 z-20 border-b border-slate-200/50 mb-4 flex flex-col gap-2">
+                            <div class="flex items-center gap-2">
+                                <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                                <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Target View Model</h4>
+                            </div>
+                            <div class="flex gap-2">
+                                <input type="text" id="new-target-path" placeholder="New path (e.g. meta.version)" class="flex-1 text-xs bg-white border border-slate-200 rounded px-2.5 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm transition-all font-mono" onkeypress="if(event.key === 'Enter') addNewTargetPath()">
+                                <button onclick="addNewTargetPath()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm" title="Add Target Node">+</button>
+                            </div>
+                        </div>
+                        <div id="target-nodes" class="space-y-3 pb-8">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Panel: Target JSON -->
+        <!-- Added min-w, transition classes, and an inner wrapper -->
+        <section id="panel-target" class="w-[28%] min-w-[280px] transition-all duration-300 ease-in-out bg-[#0f172a] border-l border-slate-800 flex flex-col z-10 shadow-[-4px_0_15px_rgba(0,0,0,0.15)] overflow-hidden shrink-0">
+            <div class="w-[28vw] min-w-[320px] h-full flex flex-col">
+                <div class="bg-[#1e293b] px-5 py-3 border-b border-slate-700/50 flex justify-between items-center shrink-0">
+                    <h2 class="text-xs font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]"></span>
+                        Output (UI View Model)
+                    </h2>
+                </div>
+                <div class="p-5 overflow-y-auto flex-1 dark-scroll">
+                    <pre id="target-json-view" class="json-viewer dark-theme font-mono text-slate-300 whitespace-pre-wrap break-all"><span class="text-slate-500 italic">// Awaiting transformation map...</span></pre>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- 1. DATA SETUP ---
+        // Changed from 'const' to 'let' so we can dynamically overwrite it!
+        let sourceData = {
+            "bookingPlatform": {
+                "platformId": "TRV-ENT-90821",
+                "generatedAt": "2026-03-11T09:15:22Z",
+                "trip": {
+                    "tripId": "TRIP-772991",
+                    "status": "confirmed",
+                    "purpose": "business-conference",
+                    "travelers": [{
+                        "travelerId": "EMP-9912",
+                        "profile": {
+                            "name": "Rahul Sharma",
+                            "department": "Engineering"
+                        }
+                    }],
+                    "itinerary": {
+                        "flights": [{
+                            "airline": { "name": "Air India" },
+                            "flightNumber": "AI302",
+                            "departure": { "airport": "BOM", "city": "Mumbai" },
+                            "arrival": { "airport": "SIN", "city": "Singapore" },
+                            "cabin": "business"
+                        }],
+                        "hotels": [{
+                            "hotel": { "name": "Marina Bay Grand Hotel" },
+                            "stay": { "checkIn": "2026-04-04", "checkOut": "2026-04-08", "roomType": "executive-suite" }
+                        }]
+                    },
+                    "pricing": {
+                        "currency": "USD",
+                        "total": 2726.55
+                    }
+                }
+            }
+        };
+
+        const targetPaths = [
+            "tripId",
+            "status",
+            "summary.destinationCity",
+            "summary.startDate",
+            "summary.endDate",
+            "summary.totalPrice.amount",
+            "summary.totalPrice.currency",
+            "traveler.id",
+            "traveler.name",
+            "traveler.department",
+            "flights[0].airline",
+            "allFlights",        // <--- NEW: Added a target array
+            "allTravelers",      // <--- NEW: Added a target array
+            "hotel.name",
+            "lastUpdated"
+        ];
+
+        let connections = [
+            { source: 'bookingPlatform.trip.tripId', target: 'tripId' },
+            { source: 'bookingPlatform.trip.status', target: 'status' },
+            { source: 'bookingPlatform.trip.travelers.0.profile.name', target: 'traveler.name' },
+            { source: 'bookingPlatform.trip.itinerary.hotels.0.stay.checkIn', target: 'summary.startDate' },
+            { source: 'bookingPlatform.trip.pricing.total', target: 'summary.totalPrice.amount' },
+            { source: 'bookingPlatform.trip.itinerary.flights', target: 'allFlights' } // <--- NEW: Map full array
+        ];
+        let activeSelection = { type: null, path: null };
+
+        // UI State
+        let panelState = { source: true, target: true };
+
+        // --- 2. UTILITY FUNCTIONS ---
+
+        function syntaxHighlight(json) {
+            if (typeof json != 'string') json = JSON.stringify(json, undefined, 2);
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) { cls = 'key'; match = match.replace(/"/g, ''); } 
+                    else { cls = 'string'; }
+                } else if (/true|false/.test(match)) { cls = 'boolean'; } 
+                else if (/null/.test(match)) { cls = 'null'; }
+                
+                if (cls === 'key') return '<span class="' + cls + '">"' + match + '"</span>:';
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+
+        function flattenObject(ob) {
+            var toReturn = {};
+            for (var i in ob) {
+                if (!ob.hasOwnProperty(i)) continue;
+                if ((typeof ob[i]) == 'object' && ob[i] !== null) {
+                    
+                    // NEW: If the object is an array, expose it as a distinct node 
+                    // so the user can map the entire array wholesale!
+                    if (Array.isArray(ob[i])) {
+                        toReturn[i] = `[Array of ${ob[i].length} items]`;
+                    }
+
+                    var flatObject = flattenObject(ob[i]);
+                    for (var x in flatObject) {
+                        if (!flatObject.hasOwnProperty(x)) continue;
+                        toReturn[i + '.' + x] = flatObject[x];
+                    }
+                } else {
+                    toReturn[i] = ob[i];
+                }
+            }
+            return toReturn;
+        }
+
+        function truncateMiddle(str, maxLength = 32) {
+            if (str.length <= maxLength) return str;
+            const half = Math.floor((maxLength - 3) / 2);
+            return str.substr(0, half) + '...' + str.substr(str.length - half);
+        }
+
+        function getValueByPath(obj, path) {
+            path = path.replace(/\[(\w+)\]/g, '.$1'); 
+            path = path.replace(/^\./, '');           
+            var a = path.split('.');
+            for (var i = 0, n = a.length; i < n; ++i) {
+                var k = a[i];
+                if (obj && k in obj) { obj = obj[k]; } else { return undefined; }
+            }
+            return obj;
+        }
+
+        function setValueByPath(obj, path, value) {
+            path = path.replace(/\[(\w+)\]/g, '.$1').replace(/^\./, '');
+            const keys = path.split('.');
+            let current = obj;
+            for (let i = 0; i < keys.length - 1; i++) {
+                const key = keys[i];
+                if (!current[key]) current[key] = (isNaN(keys[i + 1])) ? {} : [];
+                current = current[key];
+            }
+            current[keys[keys.length - 1]] = value;
+            return obj;
+        }
+
+        // --- 3. UI LOGIC ---
+
+        function init() {
+            document.getElementById('source-json-view').innerHTML = syntaxHighlight(sourceData);
+            buildVisualNodes();
+            requestAnimationFrame(() => {
+                drawLines();
+                executeVisualMapping();
+                updateCodeEditor();
+            });
+            window.addEventListener('resize', drawLines);
+        }
+
+        // --- NEW: EDIT SOURCE JSON LOGIC ---
+        function editSource() {
+            document.getElementById('source-json-edit').value = JSON.stringify(sourceData, null, 2);
+            document.getElementById('source-view-container').classList.add('hidden');
+            document.getElementById('source-edit-container').classList.remove('hidden');
+            document.getElementById('btn-edit-source').classList.add('hidden');
+        }
+
+        function cancelEditSource() {
+            document.getElementById('source-edit-container').classList.add('hidden');
+            document.getElementById('source-view-container').classList.remove('hidden');
+            document.getElementById('btn-edit-source').classList.remove('hidden');
+        }
+
+        function saveEditSource() {
+            const btn = document.getElementById('btn-edit-source');
+            const textarea = document.getElementById('source-json-edit');
+            try {
+                // 1. Parse new JSON
+                const newJson = JSON.parse(textarea.value);
+                
+                // 2. Update global data state
+                sourceData = newJson;
+                
+                // 3. Update syntax-highlighted view
+                document.getElementById('source-json-view').innerHTML = syntaxHighlight(sourceData);
+                
+                // 4. Smart cleanup: Keep connections that still exist, delete invalid ones
+                const validSourcePaths = Object.keys(flattenObject(sourceData));
+                connections = connections.filter(c => validSourcePaths.includes(c.source));
+                
+                // 5. Rebuild visual nodes & lines based on NEW json
+                buildVisualNodes();
+                requestAnimationFrame(() => {
+                    drawLines();
+                    executeVisualMapping();
+                    updateCodeEditor();
+                });
+
+                // 6. Return to view mode
+                document.getElementById('source-edit-container').classList.add('hidden');
+                document.getElementById('source-view-container').classList.remove('hidden');
+                btn.classList.remove('hidden');
+                
+            } catch (err) {
+                // Quick inline error flash
+                textarea.classList.add('bg-red-50');
+                setTimeout(() => textarea.classList.remove('bg-red-50'), 400);
+                alert("Invalid JSON Format:\n" + err.message);
+            }
+        }
+
+        function switchTab(tab) {
+            const btnVisual = document.getElementById('tab-visual');
+            const btnCode = document.getElementById('tab-code');
+            const viewVisual = document.getElementById('view-visual');
+            const viewCode = document.getElementById('view-code');
+
+            if (tab === 'visual') {
+                btnVisual.className = "px-5 py-1.5 text-sm font-medium rounded-md bg-white shadow shadow-slate-200 text-blue-600 transition-all";
+                btnCode.className = "px-5 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
+                viewVisual.classList.remove('hidden');
+                viewCode.classList.add('hidden');
+                setTimeout(drawLines, 50); 
+            } else {
+                btnCode.className = "px-5 py-1.5 text-sm font-medium rounded-md bg-white shadow shadow-slate-200 text-blue-600 transition-all";
+                btnVisual.className = "px-5 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
+                viewCode.classList.remove('hidden');
+                viewVisual.classList.add('hidden');
+            }
+        }
+
+        // New Layout Panel Toggles
+        function togglePanel(side) {
+            panelState[side] = !panelState[side];
+            const panel = document.getElementById(`panel-${side}`);
+            const btn = document.getElementById(`btn-toggle-${side}`);
+            const isOpen = panelState[side];
+
+            if (isOpen) {
+                panel.classList.remove('w-0', 'min-w-0', 'border-none');
+                panel.classList.add('w-[28%]', 'min-w-[280px]');
+                if (side === 'source') panel.classList.add('border-r');
+                if (side === 'target') panel.classList.add('border-l');
+                
+                btn.classList.add('text-blue-600', 'bg-blue-50');
+                btn.classList.remove('text-slate-400', 'hover:bg-slate-100');
+            } else {
+                panel.classList.remove('w-[28%]', 'min-w-[280px]', 'border-r', 'border-l');
+                panel.classList.add('w-0', 'min-w-0', 'border-none');
+                
+                btn.classList.remove('text-blue-600', 'bg-blue-50');
+                btn.classList.add('text-slate-400', 'hover:bg-slate-100');
+            }
+
+            // Continuously redraw lines while CSS transition is happening (duration 300ms)
+            const start = Date.now();
+            const animationLoop = setInterval(() => {
+                drawLines();
+                if (Date.now() - start > 350) clearInterval(animationLoop);
+            }, 16); // roughly 60fps
+        }
+
+        // --- 4. VISUAL WIRING ENGINE ---
+
+        function addNewTargetPath() {
+            const input = document.getElementById('new-target-path');
+            const newPath = input.value.trim();
+            
+            // Only add if it's not empty and doesn't already exist
+            if (newPath && !targetPaths.includes(newPath)) {
+                targetPaths.push(newPath);
+                input.value = ''; 
+                
+                buildVisualNodes(); 
+                // Wait for DOM to render the new node, then redraw connection lines
+                requestAnimationFrame(() => {
+                    drawLines();
+                });
+            } else if (targetPaths.includes(newPath)) {
+                // Flash the input red if it's a duplicate path
+                input.classList.add('border-red-400', 'bg-red-50');
+                setTimeout(() => input.classList.remove('border-red-400', 'bg-red-50'), 400);
+            }
+        }
+
+        function buildVisualNodes() {
+            const flatSource = flattenObject(sourceData);
+            const sourceContainer = document.getElementById('source-nodes');
+            const targetContainer = document.getElementById('target-nodes');
+            
+            sourceContainer.innerHTML = '';
+            targetContainer.innerHTML = '';
+
+            Object.keys(flatSource).forEach(path => {
+                const val = flatSource[path];
+                const displayVal = String(val).length > 25 ? String(val).substring(0,25) + '...' : String(val);
+                const displayPath = truncateMiddle(path, 34);
+                
+                const div = document.createElement('div');
+                div.className = 'node-card source-node cursor-pointer flex justify-between items-center';
+                div.dataset.path = path;
+                div.onclick = () => handleNodeClick('source', path);
+                div.innerHTML = `
+                    <div class="flex flex-col pr-4 overflow-hidden w-full">
+                        <div class="text-[11px] font-mono font-medium text-slate-500 mb-1 leading-tight w-full" title="${path}">${displayPath}</div>
+                        <div class="text-xs font-semibold text-slate-700 truncate w-full">Val: <span class="font-mono font-normal text-blue-600 bg-blue-50/50 px-1 py-0.5 rounded">${displayVal}</span></div>
+                    </div>
+                    <div class="port"></div>
+                `;
+                sourceContainer.appendChild(div);
+            });
+
+            targetPaths.forEach(path => {
+                const displayPath = truncateMiddle(path, 34);
+
+                const div = document.createElement('div');
+                div.className = 'node-card target-node cursor-pointer flex items-center h-[56px]'; 
+                div.dataset.path = path;
+                div.onclick = () => handleNodeClick('target', path);
+                div.innerHTML = `
+                    <div class="port"></div>
+                    <div class="text-[12px] font-mono font-bold text-slate-700 pl-3 w-full truncate" title="${path}">${displayPath}</div>
+                `;
+                targetContainer.appendChild(div);
+            });
+            
+            updateNodeClasses();
+        }
+
+        function handleNodeClick(type, path) {
+            if (activeSelection.type === type && activeSelection.path === path) {
+                activeSelection = { type: null, path: null };
+                updateNodeClasses();
+                return;
+            }
+
+            if (activeSelection.type === 'source' && type === 'target') {
+                createConnection(activeSelection.path, path);
+                activeSelection = { type: null, path: null };
+            } 
+            else if (activeSelection.type === 'target' && type === 'source') {
+                createConnection(path, activeSelection.path);
+                activeSelection = { type: null, path: null };
+            }
+            else {
+                activeSelection = { type, path };
+            }
+            updateNodeClasses();
+        }
+
+        function createConnection(sourcePath, targetPath) {
+            connections = connections.filter(c => c.target !== targetPath);
+            connections.push({ source: sourcePath, target: targetPath });
+            drawLines();
+            updateCodeEditor();
+        }
+
+        function clearConnections() {
+            connections = [];
+            activeSelection = { type: null, path: null };
+            updateNodeClasses();
+            drawLines();
+            document.getElementById('target-json-view').innerHTML = "<span class='text-slate-500 italic'>// Cleared. Map is empty.</span>";
+            updateCodeEditor();
+        }
+
+        function updateNodeClasses() {
+            document.querySelectorAll('.node-card').forEach(el => {
+                el.classList.remove('selected', 'connected');
+            });
+
+            if (activeSelection.path) {
+                const el = document.querySelector(`.node-card[data-path="${activeSelection.path}"]`);
+                if (el) el.classList.add('selected');
+            }
+
+            connections.forEach(conn => {
+                const srcEl = document.querySelector(`.source-node[data-path="${conn.source}"]`);
+                const tgtEl = document.querySelector(`.target-node[data-path="${conn.target}"]`);
+                if (srcEl) srcEl.classList.add('connected');
+                if (tgtEl) tgtEl.classList.add('connected');
+            });
+        }
+
+        function drawLines() {
+            const svg = document.getElementById('svg-canvas');
+            const filterDef = `<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.15" flood-color="#10b981"/></filter></defs>`;
+            svg.innerHTML = filterDef; 
+            
+            const containerBox = document.getElementById('visual-canvas-container').getBoundingClientRect();
+
+            connections.forEach(conn => {
+                const srcEl = document.querySelector(`.source-node[data-path="${conn.source}"]`);
+                const tgtEl = document.querySelector(`.target-node[data-path="${conn.target}"]`);
+                
+                if (!srcEl || !tgtEl) return;
+
+                const srcPort = srcEl.querySelector('.port').getBoundingClientRect();
+                const tgtPort = tgtEl.querySelector('.port').getBoundingClientRect();
+
+                const startX = srcPort.left - containerBox.left + (srcPort.width / 2);
+                const startY = srcPort.top - containerBox.top + (srcPort.height / 2);
+                
+                const endX = tgtPort.left - containerBox.left + (tgtPort.width / 2);
+                const endY = tgtPort.top - containerBox.top + (tgtPort.height / 2);
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                
+                const controlOffsetX = Math.max(70, Math.abs(endX - startX) * 0.4);
+                const d = `M ${startX} ${startY} C ${startX + controlOffsetX} ${startY}, ${endX - controlOffsetX} ${endY}, ${endX} ${endY}`;
+                
+                path.setAttribute("d", d);
+                path.setAttribute("fill", "none");
+                path.setAttribute("stroke", "#10b981"); 
+                path.setAttribute("stroke-width", "2.5");
+                path.setAttribute("stroke-linecap", "round");
+                path.setAttribute("filter", "url(#shadow)");
+                
+                svg.appendChild(path);
+            });
+        }
+
+        function executeVisualMapping() {
+            const resultObj = {};
+            
+            connections.forEach(conn => {
+                const value = getValueByPath(sourceData, conn.source);
+                if (value !== undefined) {
+                    setValueByPath(resultObj, conn.target, value);
+                }
+            });
+
+            document.getElementById('target-json-view').innerHTML = syntaxHighlight(resultObj);
+            
+            const panelWrapper = document.getElementById('panel-target').firstElementChild;
+            panelWrapper.style.backgroundColor = '#1e293b';
+            setTimeout(() => panelWrapper.style.backgroundColor = '', 200);
+        }
+
+        function updateCodeEditor() {
+            const tree = {};
+            
+            // Build the object tree based on visual connections
+            connections.forEach(conn => {
+                // Generate safe JS optional chaining paths (e.g., backendData?.trip?.[0]?.name)
+                const parts = conn.source.split('.');
+                let sourceExpr = 'backendData';
+                parts.forEach(p => {
+                    if (isNaN(p)) {
+                        sourceExpr += `?.${p}`;
+                    } else {
+                        sourceExpr += `?.[${p}]`;
+                    }
+                });
+
+                // Traverse the target path and create nested objects/arrays
+                let normalizedTarget = conn.target.replace(/\[(\w+)\]/g, '.$1').replace(/^\./, '');
+                const tgtParts = normalizedTarget.split('.');
+                let current = tree;
+                for (let i = 0; i < tgtParts.length - 1; i++) {
+                    const key = tgtParts[i];
+                    if (!current[key]) {
+                        current[key] = isNaN(tgtParts[i + 1]) ? {} : []; // Auto-detect arrays vs objects
+                    }
+                    current = current[key];
+                }
+                current[tgtParts[tgtParts.length - 1]] = sourceExpr;
+            });
+
+            // Convert the object tree into nicely formatted JS source code
+            function stringifyTree(obj, indent) {
+                if (Array.isArray(obj)) {
+                    if (obj.length === 0) return '[]';
+                    let str = '[\n';
+                    for (let i = 0; i < obj.length; i++) {
+                        str += `${indent}  `;
+                        const item = obj[i];
+                        if (item === undefined) {
+                            str += 'null';
+                        } else if (typeof item === 'object' && item !== null) {
+                            str += stringifyTree(item, indent + '  ');
+                        } else {
+                            str += item;
+                        }
+                        if (i < obj.length - 1) str += ',';
+                        str += '\n';
+                    }
+                    str += `${indent}]`;
+                    return str;
+                } else {
+                    const keys = Object.keys(obj);
+                    if (keys.length === 0) return '{}';
+                    let str = '{\n';
+                    keys.forEach((k, i) => {
+                        str += `${indent}  "${k}": `;
+                        if (typeof obj[k] === 'object' && obj[k] !== null) {
+                            str += stringifyTree(obj[k], indent + '  ');
+                        } else {
+                            str += obj[k];
+                        }
+                        if (i < keys.length - 1) str += ',';
+                        str += '\n';
+                    });
+                    str += `${indent}}`;
+                    return str;
+                }
+            }
+
+            const objectStr = stringifyTree(tree, '  ');
+
+            const finalCode = `// ⚠️ Auto-generated by Visual Mapper
+// Visual changes will automatically update this code.
+
+function mapData(backendData) {
+  return ${objectStr.trim()};
+}
+
+return mapData(sourceData);`;
+
+            document.getElementById('code-editor').value = finalCode;
+        }
+
+        // --- 5. CODE MAPPING ENGINE ---
+
+        function executeCodeMapping() {
+            const codeString = document.getElementById('code-editor').value;
+            const targetView = document.getElementById('target-json-view');
+            
+            try {
+                const mapperFunc = new Function('sourceData', codeString);
+                const resultObj = mapperFunc(sourceData);
+                targetView.innerHTML = syntaxHighlight(resultObj);
+
+                const panelWrapper = document.getElementById('panel-target').firstElementChild;
+                panelWrapper.style.backgroundColor = '#1e293b';
+                setTimeout(() => panelWrapper.style.backgroundColor = '', 200);
+            } catch (err) {
+                targetView.innerHTML = `<span class="text-red-400 font-bold font-sans">Error executing script:</span>\n\n${err.message}`;
+            }
+        }
+
+        // NEW: Advanced Bidirectional Sync (Code -> Visual)
+        function syncCodeToVisual() {
+            const codeString = document.getElementById('code-editor').value;
+            try {
+                const mapperFunc = new Function('sourceData', codeString);
+                
+                // 1. Create a deep JS Proxy to track path access inside user's custom JS code
+                function createPathRecorder(basePath = '') {
+                    return new Proxy({}, {
+                        get(target, prop) {
+                            if (prop === '___isPathRecorder') return true;
+                            if (prop === '___path') return basePath;
+                            if (typeof prop === 'symbol') return undefined;
+                            // Ignore internal JS property calls
+                            if (['toString', 'valueOf', 'toJSON', 'constructor', 'then'].includes(prop)) return undefined;
+                            
+                            const newPath = basePath ? `${basePath}.${prop}` : prop;
+                            return createPathRecorder(newPath);
+                        }
+                    });
+                }
+                
+                // 2. Pass the tracer proxy as 'sourceData' into the user's function
+                const mockBackend = createPathRecorder();
+                const resultTree = mapperFunc(mockBackend);
+                
+                let newConnections = [];
+                
+                // 3. Traverse the resulting object to find where the proxies ended up
+                function traverseAndExtract(obj, currentTargetPath = '') {
+                    if (!obj) return;
+                    
+                    if (typeof obj === 'object' && obj.___isPathRecorder) {
+                        newConnections.push({ source: obj.___path, target: currentTargetPath });
+                        // Add target path if it doesn't exist visually yet
+                        if (currentTargetPath && !targetPaths.includes(currentTargetPath)) {
+                            targetPaths.push(currentTargetPath);
+                        }
+                        return;
+                    }
+                    
+                    if (typeof obj === 'object') {
+                        for (let key in obj) {
+                            if (obj.hasOwnProperty(key)) {
+                                let nextPath = currentTargetPath 
+                                    ? (Array.isArray(obj) ? `${currentTargetPath}[${key}]` : `${currentTargetPath}.${key}`) 
+                                    : key;
+                                traverseAndExtract(obj[key], nextPath);
+                            }
+                        }
+                    }
+                }
+                
+                traverseAndExtract(resultTree);
+                
+                // 4. Update the visual mapper state
+                connections = newConnections;
+                buildVisualNodes();
+                requestAnimationFrame(() => {
+                    drawLines();
+                    executeVisualMapping();
+                });
+                
+                // Visual feedback success animation
+                const btn = document.querySelector('button[onclick="syncCodeToVisual()"]');
+                const origText = btn.innerHTML;
+                btn.innerHTML = `<span class="text-green-600 font-bold flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Synced!</span>`;
+                setTimeout(() => btn.innerHTML = origText, 1500);
+
+            } catch (err) {
+                console.error(err);
+                alert("Could not sync to Visual Mapper.\n\nEnsure your code returns a clean object mapping from 'sourceData' without complex logic that breaks the path tracer.\n\nError: " + err.message);
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
