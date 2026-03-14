@@ -3,773 +3,735 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual Mapper BFF</title>
+    <title>JSON Visual Mapper</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
-        body { font-family: 'Inter', sans-serif; }
-        .font-mono { font-family: 'JetBrains Mono', monospace; }
-
-        /* Elegant Scrollbars */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .dark-scroll::-webkit-scrollbar-thumb { background: #475569; }
-        .dark-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        
-        /* JSON Viewers */
-        .json-viewer { font-size: 0.8rem; line-height: 1.5; }
-        
-        /* Light Theme Syntax Highlighting (Left Panel) */
-        .light-theme .string { color: #a31515; }
-        .light-theme .number { color: #098658; }
-        .light-theme .boolean, .light-theme .null { color: #0000ff; font-weight: 500; }
-        .light-theme .key { color: #0451a5; font-weight: 500; }
-
-        /* Dark Theme Syntax Highlighting (Right Panel) */
-        .dark-theme .string { color: #ce9178; }
-        .dark-theme .number { color: #b5cea8; }
-        .dark-theme .boolean, .dark-theme .null { color: #569cd6; font-weight: 500; }
-        .dark-theme .key { color: #9cdcfe; font-weight: 500; }
-
-        /* Canvas Grid Background */
-        .canvas-bg {
-            background-color: #f8fafc;
-            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-            background-size: 24px 24px;
+        /* Custom Scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
-
-        /* Node Cards */
-        .node-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 10px 14px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            z-index: 10;
+        ::-webkit-scrollbar-track {
+            background: transparent;
         }
-        .node-card:hover {
-            border-color: #94a3b8;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-            transform: translateY(-1px);
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
         }
-        .node-card.selected {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
         }
-        .node-card.connected {
-            border-color: #10b981;
+        .font-mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
-
-        /* Connection Ports */
-        .port {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #ffffff;
-            border: 2px solid #cbd5e1;
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            transition: all 0.2s;
-            z-index: 20;
-        }
-        .node-card:hover .port { border-color: #94a3b8; }
-        .node-card.selected .port { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
-        .node-card.connected .port { border-color: #10b981; background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2); }
-        
-        .source-node .port { right: -6px; }
-        .target-node .port { left: -6px; }
     </style>
 </head>
-<body class="bg-slate-50 h-screen flex flex-col overflow-hidden text-slate-800">
+<body class="flex flex-col h-screen bg-[#fafafa] text-gray-800 font-sans overflow-hidden">
+
+    <!-- Toast Notification System -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white text-sm font-medium px-4 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-50 flex items-center gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-blue-400"></i>
+        <span id="toast-message"></span>
+    </div>
 
     <!-- Header -->
-    <header class="bg-white border-b border-slate-200 px-5 py-3 flex justify-between items-center shadow-sm z-20">
-        
-        <!-- Left Section -->
-        <div class="flex items-center gap-4">
-            <button onclick="togglePanel('source')" id="btn-toggle-source" class="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors" title="Toggle Source Panel">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
-            </button>
-            <div class="flex items-center gap-3">
-                <div class="bg-blue-600 p-1.5 rounded-md">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h10"/><path d="M7 12h10"/><path d="M7 17h10"/></svg>
-                </div>
-                <h1 class="text-[17px] font-semibold text-slate-800 tracking-tight">Visual Mapper BFF</h1>
+    <header class="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 shrink-0 select-none">
+        <div class="flex items-center gap-3">
+            <div class="bg-gray-900 text-white font-bold w-7 h-7 flex items-center justify-center rounded-md text-xs">
+                VM
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+                <span class="text-gray-500">Tools</span>
+                <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-400"></i>
+                <span class="text-gray-900 font-semibold">JSON Visual Mapper</span>
             </div>
         </div>
-
-        <!-- Center Section: Tabs -->
-        <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200/60 shadow-inner">
-            <button id="tab-visual" class="px-5 py-1.5 text-sm font-medium rounded-md bg-white shadow shadow-slate-200 text-blue-600 transition-all" onclick="switchTab('visual')">Visual Mapper</button>
-            <button id="tab-code" class="px-5 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all" onclick="switchTab('code')">Code Editor</button>
-        </div>
-
-        <!-- Right Section -->
-        <div class="flex items-center gap-4">
-            <button onclick="togglePanel('target')" id="btn-toggle-target" class="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors" title="Toggle Output Panel">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>
+        
+        <div class="flex items-center gap-3">
+            <button onclick="handleParseAll()" class="flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 px-4 py-1.5 rounded-full text-sm font-medium text-gray-700 transition-colors shadow-sm">
+                <i data-lucide="play" class="w-3.5 h-3.5 text-gray-500"></i>
+                <span>Parse All</span>
             </button>
+            <button onclick="handleGenerate()" class="flex items-center gap-2 bg-[#2563eb] hover:bg-blue-700 px-5 py-1.5 rounded-full text-sm font-medium text-white transition-colors shadow-sm">
+                <span>Generate Payload</span>
+            </button>
+            <div class="w-px h-5 bg-gray-200 mx-1"></div>
+            <i data-lucide="settings" class="w-4.5 h-4.5 text-gray-400 hover:text-gray-600 cursor-pointer"></i>
         </div>
     </header>
 
-    <!-- Main Workspace -->
-    <main class="flex-1 flex overflow-hidden">
+    <!-- Main Workspace (Bento Box Layout) -->
+    <main class="flex-1 overflow-hidden relative p-3 pb-0 flex gap-3">
         
-        <!-- Left Panel: Source JSON -->
-        <!-- Added min-w, transition classes, and an inner wrapper to prevent text squishing -->
-        <section id="panel-source" class="w-[28%] min-w-[280px] transition-all duration-300 ease-in-out bg-[#fafafa] border-r border-slate-200 flex flex-col z-10 shadow-[2px_0_8px_rgba(0,0,0,0.02)] overflow-hidden shrink-0">
-            <div class="w-[28vw] min-w-[320px] h-full flex flex-col">
-                <div class="px-5 py-3 border-b border-slate-200 bg-white flex justify-between items-center shrink-0">
-                    <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Source (Domain API)</h2>
-                    <button onclick="editSource()" id="btn-edit-source" class="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-                        Edit JSON
+        <!-- LEFT PANE: Source JSON -->
+        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+            <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between">
+                <div class="flex items-center" id="source-tabs">
+                    <button data-tab="raw" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                        <i data-lucide="file-json" class="w-4 h-4 text-blue-500"></i> Source JSON
+                    </button>
+                    <button data-tab="tree" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
+                        <i data-lucide="list-tree" class="w-4 h-4 text-gray-400"></i> Visual Tree
                     </button>
                 </div>
-                <div id="source-view-container" class="p-5 overflow-y-auto flex-1">
-                    <pre id="source-json-view" class="json-viewer light-theme font-mono text-slate-700 whitespace-pre-wrap break-all"></pre>
-                </div>
-                <!-- Hidden Edit Mode Container -->
-                <div id="source-edit-container" class="hidden flex-1 flex flex-col bg-slate-50">
-                    <textarea id="source-json-edit" class="flex-1 w-full p-5 bg-transparent text-slate-700 font-mono text-[12px] leading-relaxed resize-none focus:outline-none focus:ring-inset focus:ring-2 focus:ring-blue-500/20" spellcheck="false"></textarea>
-                    <div class="p-3 border-t border-slate-200 bg-white flex justify-end gap-2 shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]">
-                        <button onclick="cancelEditSource()" class="px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded transition-colors">Cancel</button>
-                        <button onclick="saveEditSource()" class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm transition-colors flex items-center gap-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            Save & Update Paths
-                        </button>
-                    </div>
-                </div>
+                <i data-lucide="plus" class="w-4 h-4 text-gray-400 mx-2"></i>
             </div>
-        </section>
-
-        <!-- Center Panel: Mapping Area -->
-        <section class="flex-1 bg-white flex flex-col relative z-0 min-w-[400px]">
             
-            <!-- Code Tab -->
-            <div id="view-code" class="hidden flex-1 flex flex-col h-full relative">
-                <div class="px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center">
-                    <div>
-                        <h3 class="text-sm font-semibold text-slate-800">Transformation Script</h3>
-                        <p class="text-xs text-slate-500">Map the global <code class="bg-slate-100 px-1 rounded text-slate-700 font-mono">sourceData</code> object.</p>
-                    </div>
-                    <div class="flex gap-2">
-                        <!-- NEW: Sync to Visual Button -->
-                        <button onclick="syncCodeToVisual()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold transition-colors shadow-sm flex items-center gap-1.5" title="Extract visual mappings from this code">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
-                            Sync to Visual
-                        </button>
-                        <button onclick="executeCodeMapping()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                            Execute Map
-                        </button>
+            <div class="flex-1 overflow-hidden relative">
+                <!-- Source Raw -->
+                <div id="source-raw-view" class="absolute inset-0 flex">
+                    <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
+                        <div id="source-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden" style="pointer-events: none"></div>
+                        <textarea id="source-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" spellcheck="false" style="line-height: 21px"></textarea>
                     </div>
                 </div>
-                <textarea id="code-editor" class="flex-1 w-full p-6 bg-[#0f172a] text-[#e2e8f0] font-mono text-[13px] leading-relaxed resize-none focus:outline-none" spellcheck="false">
-function mapData(backendData) {
-  const trip = backendData.bookingPlatform.trip;
-  const traveler = trip.travelers[0];
-  const flight = trip.itinerary.flights[0];
-  const hotel = trip.itinerary.hotels[0];
-
-  return {
-    tripId: trip.tripId,
-    status: trip.status,
-    purpose: trip.purpose,
-    summary: {
-      destinationCity: flight.arrival.city,
-      startDate: hotel.stay.checkIn,
-      endDate: hotel.stay.checkOut,
-      totalPrice: {
-        amount: trip.pricing.total,
-        currency: trip.pricing.currency
-      }
-    },
-    traveler: {
-      id: traveler.travelerId,
-      name: traveler.profile.name,
-      department: traveler.profile.department
-    },
-    quickActions: [
-      { action: "view_ticket", label: "View Flight Ticket" },
-      { action: "contact_support", label: "Contact Support" }
-    ],
-    lastUpdated: backendData.bookingPlatform.generatedAt
-  };
-}
-
-return mapData(sourceData);
-</textarea>
+                <!-- Source Tree -->
+                <div id="source-tree-view" class="absolute inset-0 hidden overflow-y-auto p-3 bg-[#fafafa]"></div>
             </div>
+        </div>
 
-            <!-- Visual Tab -->
-            <div id="view-visual" class="flex-1 flex flex-col h-full relative">
-                <div class="px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center z-10 shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
-                    <div>
-                        <h3 class="text-sm font-semibold text-slate-800">Data Wiring</h3>
-                        <p class="text-[11px] text-slate-500 mt-0.5">Connect source nodes to target schema definitions.</p>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="clearConnections()" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded text-xs font-semibold transition-colors shadow-sm">
-                            Clear
-                        </button>
-                        <button onclick="executeVisualMapping()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/></svg>
-                            Apply Map
-                        </button>
-                    </div>
+        <!-- CENTER PANE: Mapping Canvas & Sandbox Engine -->
+        <div class="flex-[1.5] flex flex-col min-w-[400px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+            <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between z-10">
+                <div class="flex items-center" id="center-tabs">
+                    <button data-tab="canvas" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                        <i data-lucide="git-merge" class="w-4 h-4 text-blue-500"></i> Mapping
+                    </button>
+                    <button data-tab="config" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
+                        <i data-lucide="database" class="w-4 h-4 text-gray-400"></i> Config
+                    </button>
+                    <button data-tab="output" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
+                        <i data-lucide="code-2" class="w-4 h-4 text-gray-400"></i> Output
+                    </button>
+                    <div class="w-px h-5 bg-gray-200 mx-1"></div>
+                    <button data-tab="sandbox" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
+                        <i data-lucide="terminal" class="w-4 h-4 text-gray-400"></i> JS Sandbox
+                    </button>
                 </div>
-
-                <!-- Wiring Canvas -->
-                <div class="flex-1 relative overflow-hidden flex canvas-bg" id="visual-canvas-container">
-                    <!-- SVG Overlay for lines -->
-                    <svg id="svg-canvas" class="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
-                        <defs>
-                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                                <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.15" flood-color="#10b981"/>
-                            </filter>
-                        </defs>
-                    </svg>
+                <i data-lucide="plus" class="w-4 h-4 text-gray-400 mx-2"></i>
+            </div>
+            
+            <div class="flex-1 relative overflow-hidden bg-[#fafafa]">
+                
+                <!-- Canvas View -->
+                <div id="center-canvas-view" class="absolute inset-0 flex flex-col items-center justify-center p-8 z-10">
+                    <div id="canvas-empty-state" class="flex flex-col items-center justify-center text-center pointer-events-none transition-opacity">
+                        <div class="w-16 h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mb-4 shadow-sm">
+                            <i data-lucide="git-merge" class="w-7 h-7 text-gray-400"></i>
+                        </div>
+                        <h3 class="text-[15px] font-semibold text-gray-800 mb-2">Connect Fields</h3>
+                        <p class="text-[13px] text-gray-500 max-w-xs">Select a field from the Source tree and a field from the Target tree to map them.</p>
+                    </div>
                     
-                    <!-- Source Column -->
-                    <div class="w-1/2 h-full overflow-y-auto px-8 py-6 relative z-10" onscroll="drawLines()">
-                        <div class="flex items-center gap-2 mb-4 sticky top-0 bg-[#f8fafc]/90 backdrop-blur-sm py-2 z-20 border-b border-slate-200/50">
-                            <div class="w-2 h-2 rounded-full bg-slate-400"></div>
-                            <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Source Paths</h4>
-                        </div>
-                        <div id="source-nodes" class="space-y-3 pb-8">
-                            <!-- Populated by JS -->
-                        </div>
-                    </div>
-
-                    <!-- Visual separator line in middle -->
-                    <div class="absolute left-1/2 top-0 bottom-0 w-px bg-slate-200/60 border-r border-dashed border-slate-300 z-0"></div>
-
-                    <!-- Target Column -->
-                    <div class="w-1/2 h-full overflow-y-auto px-8 py-6 relative z-10" onscroll="drawLines()">
-                        <div class="sticky top-0 bg-[#f8fafc]/90 backdrop-blur-sm pt-2 pb-3 z-20 border-b border-slate-200/50 mb-4 flex flex-col gap-2">
+                    <div id="canvas-mappings" class="mt-8 w-full max-w-sm hidden">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                                Active Mappings (<span id="mapping-count">0</span>)
+                            </div>
                             <div class="flex items-center gap-2">
-                                <div class="w-2 h-2 rounded-full bg-blue-500"></div>
-                                <h4 class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Target View Model</h4>
-                            </div>
-                            <div class="flex gap-2">
-                                <input type="text" id="new-target-path" placeholder="New path (e.g. meta.version)" class="flex-1 text-xs bg-white border border-slate-200 rounded px-2.5 py-1.5 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-sm transition-all font-mono" onkeypress="if(event.key === 'Enter') addNewTargetPath()">
-                                <button onclick="addNewTargetPath()" class="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm" title="Add Target Node">+</button>
+                                <button onclick="clearMappings()" class="text-[11px] font-medium text-gray-500 hover:text-rose-600 px-2 py-1 transition-colors">
+                                    Clear All
+                                </button>
+                                <button onclick="handleCopyConfig()" class="flex items-center gap-1.5 text-[11px] font-medium text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded transition-colors" title="Copy mapping configuration as JSON array">
+                                    <i data-lucide="copy" class="w-3 h-3" id="copy-icon"></i>
+                                    <span id="copy-text">Copy Config</span>
+                                </button>
                             </div>
                         </div>
-                        <div id="target-nodes" class="space-y-3 pb-8">
-                            <!-- Populated by JS -->
+                        <div id="mappings-list" class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2">
+                            <!-- Mappings injected via JS -->
                         </div>
                     </div>
                 </div>
-            </div>
 
-        </section>
+                <!-- Config View -->
+                <div id="center-config-view" class="absolute inset-0 hidden">
+                    <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
+                        <div id="config-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
+                        <textarea id="config-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" readonly placeholder="[\n  // Active mapping configuration will appear here...\n]" spellcheck="false" style="line-height: 21px"></textarea>
+                    </div>
+                </div>
 
-        <!-- Right Panel: Target JSON -->
-        <!-- Added min-w, transition classes, and an inner wrapper -->
-        <section id="panel-target" class="w-[28%] min-w-[280px] transition-all duration-300 ease-in-out bg-[#0f172a] border-l border-slate-800 flex flex-col z-10 shadow-[-4px_0_15px_rgba(0,0,0,0.15)] overflow-hidden shrink-0">
-            <div class="w-[28vw] min-w-[320px] h-full flex flex-col">
-                <div class="bg-[#1e293b] px-5 py-3 border-b border-slate-700/50 flex justify-between items-center shrink-0">
-                    <h2 class="text-xs font-bold text-slate-200 uppercase tracking-widest flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]"></span>
-                        Output (UI View Model)
-                    </h2>
+                <!-- Output View -->
+                <div id="center-output-view" class="absolute inset-0 hidden">
+                    <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
+                        <div id="output-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
+                        <textarea id="output-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" readonly placeholder="// Generated payload will appear here..." spellcheck="false" style="line-height: 21px"></textarea>
+                    </div>
                 </div>
-                <div class="p-5 overflow-y-auto flex-1 dark-scroll">
-                    <pre id="target-json-view" class="json-viewer dark-theme font-mono text-slate-300 whitespace-pre-wrap break-all"><span class="text-slate-500 italic">// Awaiting transformation map...</span></pre>
+
+                <!-- Sandbox View -->
+                <div id="center-sandbox-view" class="absolute inset-0 hidden flex-col relative">
+                    <div class="flex-1 flex flex-col min-h-0 border-b border-gray-200">
+                        <div class="bg-white px-3 py-1.5 flex items-center justify-between border-b border-gray-200 shrink-0 shadow-sm z-10">
+                            <div>
+                                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">JavaScript Execution Engine</span>
+                                <span class="text-[10px] text-gray-400">Map the global <code>sourceData</code> object</span>
+                            </div>
+                            <button onclick="loadActiveConfigIntoSandbox()" class="text-[11px] font-medium text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded transition-colors">
+                                Generate Setup
+                            </button>
+                        </div>
+                        <div class="flex-1 relative bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
+                             <div id="sandbox-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
+                             <textarea id="sandbox-code" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" placeholder="// Write or load JavaScript transformation code here..." spellcheck="false" style="line-height: 21px"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="h-14 bg-[#f8f9fa] flex items-center justify-center border-b border-gray-200 shrink-0 shadow-sm z-10">
+                        <button onclick="handleSandboxRun()" class="flex items-center gap-2 bg-emerald-500 text-white px-6 py-2 rounded-full hover:bg-emerald-600 text-xs font-bold transition-all shadow-sm transform hover:scale-105">
+                            <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i> Execute Script
+                        </button>
+                    </div>
+                    
+                    <div class="flex-1 flex flex-col min-h-0">
+                        <div class="bg-white px-3 py-1.5 border-b border-gray-200 shrink-0 shadow-sm z-10">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Output: Generated JSON</span>
+                        </div>
+                        <div class="flex-1 relative bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
+                             <div id="test-output-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
+                             <textarea id="test-output-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" readonly placeholder="// Transformation result will appear here..." spellcheck="false" style="line-height: 21px"></textarea>
+                        </div>
+                    </div>
                 </div>
+
             </div>
-        </section>
+        </div>
+
+        <!-- RIGHT PANE: Target JSON -->
+        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+            <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between">
+                <div class="flex items-center" id="target-tabs">
+                    <button data-tab="raw" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                        <i data-lucide="layout-template" class="w-4 h-4 text-blue-500"></i> DTO
+                    </button>
+                    <button data-tab="tree" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
+                        <i data-lucide="list-tree" class="w-4 h-4 text-gray-400"></i> Visual Tree
+                    </button>
+                </div>
+                <i data-lucide="plus" class="w-4 h-4 text-gray-400 mx-2"></i>
+            </div>
+            
+            <div class="flex-1 overflow-hidden relative">
+                 <!-- Target Raw -->
+                 <div id="target-raw-view" class="absolute inset-0 flex">
+                    <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
+                        <div id="target-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden" style="pointer-events: none"></div>
+                        <textarea id="target-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" spellcheck="false" style="line-height: 21px"></textarea>
+                    </div>
+                </div>
+                <!-- Target Tree -->
+                <div id="target-tree-view" class="absolute inset-0 hidden overflow-y-auto p-3 bg-[#fafafa]"></div>
+            </div>
+        </div>
 
     </main>
+    
+    <!-- Footer -->
+    <footer class="h-8 border-t border-gray-200 bg-[#fafafa] flex items-center justify-between px-4 text-[11px] font-medium text-gray-500 select-none">
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-1.5 hover:text-gray-800 cursor-pointer">
+                <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
+                <span>Console</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-5">
+            <span><span id="footer-mapping-count">0</span> Mappings Active</span>
+            <span>UTF-8</span>
+            <span class="flex items-center gap-1.5 text-gray-700">
+                <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                Vanilla JS Environment
+            </span>
+        </div>
+    </footer>
 
+    <!-- Application Logic -->
     <script>
-        // --- 1. DATA SETUP ---
-        // Changed from 'const' to 'let' so we can dynamically overwrite it!
-        let sourceData = {
-            "bookingPlatform": {
-                "platformId": "TRV-ENT-90821",
-                "generatedAt": "2026-03-11T09:15:22Z",
-                "trip": {
-                    "tripId": "TRIP-772991",
-                    "status": "confirmed",
-                    "purpose": "business-conference",
-                    "travelers": [{
-                        "travelerId": "EMP-9912",
-                        "profile": {
-                            "name": "Rahul Sharma",
-                            "department": "Engineering"
-                        }
-                    }],
-                    "itinerary": {
-                        "flights": [{
-                            "airline": { "name": "Air India" },
-                            "flightNumber": "AI302",
-                            "departure": { "airport": "BOM", "city": "Mumbai" },
-                            "arrival": { "airport": "SIN", "city": "Singapore" },
-                            "cabin": "business"
-                        }],
-                        "hotels": [{
-                            "hotel": { "name": "Marina Bay Grand Hotel" },
-                            "stay": { "checkIn": "2026-04-04", "checkOut": "2026-04-08", "roomType": "executive-suite" }
-                        }]
-                    },
-                    "pricing": {
-                        "currency": "USD",
-                        "total": 2726.55
-                    }
-                }
-            }
+        // --- State Management ---
+        const state = {
+            sourceJson: `{\n  "bookingPlatform": {\n    "platformId": "TRV-ENT-90821",\n    "generatedAt": "2026-03-11T09:15:22Z",\n    "trip": {\n      "tripId": "TRIP-772991",\n      "status": "confirmed",\n      "purpose": "business-conference",\n      "travelers": [\n        {\n          "travelerId": "EMP-9912",\n          "profile": {\n            "name": "Rahul Sharma",\n            "department": "Engineering"\n          }\n        }\n      ],\n      "itinerary": {\n        "flights": [\n          {\n            "airline": {\n              "name": "Air India"\n            },\n            "flightNumber": "AI302",\n            "departure": {\n              "airport": "BOM",\n              "city": "Mumbai"\n            },\n            "arrival": {\n              "airport": "SIN",\n              "city": "Singapore"\n            },\n            "cabin": "business"\n          }\n        ],\n        "hotels": [\n          {\n            "hotel": {\n              "name": "Marina Bay Grand Hotel"\n            },\n            "stay": {\n              "checkIn": "2026-04-04",\n              "checkOut": "2026-04-08",\n              "roomType": "executive-suite"\n            }\n          }\n        ]\n      },\n      "pricing": {\n        "currency": "USD",\n        "total": 2726.55\n      }\n    }\n  }\n}`,
+            targetJson: `{\n  "expenseReport": {\n    "employeeId": "",\n    "employeeName": "",\n    "travelReason": "",\n    "costDetails": {\n      "amount": 0,\n      "currencyCode": ""\n    },\n    "flightInfo": {\n      "carrier": "",\n      "origin": "",\n      "destination": ""\n    }\n  }\n}`,
+            sourcePaths: [],
+            targetPaths: [],
+            activeSourceTab: 'raw',
+            activeTargetTab: 'raw',
+            activeCenterTab: 'canvas',
+            selectedSource: null,
+            selectedTarget: null,
+            mappings: [],
+            outputJson: '',
+            sandboxCode: '// Click "Generate Setup" to translate visual mappings into JS Code.\n// Or write custom JS here to process the payload!\n\nfunction mapData(backendData) {\n  return {\n    // your mapping logic\n  };\n}\n\nreturn mapData(sourceData);',
+            testOutputJson: '',
+            editingMappingId: null,
+            editSource: '',
+            editTarget: ''
         };
 
-        const targetPaths = [
-            "tripId",
-            "status",
-            "summary.destinationCity",
-            "summary.startDate",
-            "summary.endDate",
-            "summary.totalPrice.amount",
-            "summary.totalPrice.currency",
-            "traveler.id",
-            "traveler.name",
-            "traveler.department",
-            "flights[0].airline",
-            "allFlights",        // <--- NEW: Added a target array
-            "allTravelers",      // <--- NEW: Added a target array
-            "hotel.name",
-            "lastUpdated"
-        ];
-
-        let connections = [
-            { source: 'bookingPlatform.trip.tripId', target: 'tripId' },
-            { source: 'bookingPlatform.trip.status', target: 'status' },
-            { source: 'bookingPlatform.trip.travelers.0.profile.name', target: 'traveler.name' },
-            { source: 'bookingPlatform.trip.itinerary.hotels.0.stay.checkIn', target: 'summary.startDate' },
-            { source: 'bookingPlatform.trip.pricing.total', target: 'summary.totalPrice.amount' },
-            { source: 'bookingPlatform.trip.itinerary.flights', target: 'allFlights' } // <--- NEW: Map full array
-        ];
-        let activeSelection = { type: null, path: null };
-
-        // UI State
-        let panelState = { source: true, target: true };
-
-        // --- 2. UTILITY FUNCTIONS ---
-
-        function syntaxHighlight(json) {
-            if (typeof json != 'string') json = JSON.stringify(json, undefined, 2);
-            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-                let cls = 'number';
-                if (/^"/.test(match)) {
-                    if (/:$/.test(match)) { cls = 'key'; match = match.replace(/"/g, ''); } 
-                    else { cls = 'string'; }
-                } else if (/true|false/.test(match)) { cls = 'boolean'; } 
-                else if (/null/.test(match)) { cls = 'null'; }
-                
-                if (cls === 'key') return '<span class="' + cls + '">"' + match + '"</span>:';
-                return '<span class="' + cls + '">' + match + '</span>';
-            });
+        // --- Utility Functions ---
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = message;
+            toast.classList.remove('opacity-0', 'translate-y-4');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-4');
+            }, 3000);
         }
 
-        function flattenObject(ob) {
-            var toReturn = {};
-            for (var i in ob) {
-                if (!ob.hasOwnProperty(i)) continue;
-                if ((typeof ob[i]) == 'object' && ob[i] !== null) {
-                    
-                    // NEW: If the object is an array, expose it as a distinct node 
-                    // so the user can map the entire array wholesale!
-                    if (Array.isArray(ob[i])) {
-                        toReturn[i] = `[Array of ${ob[i].length} items]`;
-                    }
+        const flattenJSON = (obj, prefix = '', paths = []) => {
+            if (obj === null || typeof obj !== 'object') return paths;
 
-                    var flatObject = flattenObject(ob[i]);
-                    for (var x in flatObject) {
-                        if (!flatObject.hasOwnProperty(x)) continue;
-                        toReturn[i + '.' + x] = flatObject[x];
+            if (Array.isArray(obj)) {
+                obj.forEach((item, index) => {
+                    const newPath = `${prefix}[${index}]`;
+                    const isItemArray = Array.isArray(item);
+                    const isItemObject = typeof item === 'object' && item !== null && !isItemArray;
+
+                    paths.push({
+                        path: newPath,
+                        key: `[${index}]`,
+                        type: isItemArray ? 'array' : typeof item,
+                        isLeaf: !isItemArray && !isItemObject,
+                    });
+
+                    if (isItemObject || isItemArray) {
+                        flattenJSON(item, newPath, paths);
                     }
-                } else {
-                    toReturn[i] = ob[i];
+                });
+                return paths;
+            }
+
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    const newPath = prefix ? `${prefix}.${key}` : key;
+                    const value = obj[key];
+                    const isArray = Array.isArray(value);
+                    const isObject = typeof value === 'object' && value !== null && !isArray;
+                    
+                    paths.push({
+                        path: newPath,
+                        key: key,
+                        type: isArray ? 'array' : typeof value,
+                        isLeaf: !isArray && !isObject,
+                    });
+                    
+                    if (isArray || isObject) {
+                        flattenJSON(value, newPath, paths);
+                    }
                 }
             }
-            return toReturn;
-        }
+            return paths;
+        };
 
-        function truncateMiddle(str, maxLength = 32) {
-            if (str.length <= maxLength) return str;
-            const half = Math.floor((maxLength - 3) / 2);
-            return str.substr(0, half) + '...' + str.substr(str.length - half);
-        }
-
-        function getValueByPath(obj, path) {
-            path = path.replace(/\[(\w+)\]/g, '.$1'); 
-            path = path.replace(/^\./, '');           
-            var a = path.split('.');
-            for (var i = 0, n = a.length; i < n; ++i) {
-                var k = a[i];
-                if (obj && k in obj) { obj = obj[k]; } else { return undefined; }
-            }
-            return obj;
-        }
-
-        function setValueByPath(obj, path, value) {
-            path = path.replace(/\[(\w+)\]/g, '.$1').replace(/^\./, '');
-            const keys = path.split('.');
-            let current = obj;
-            for (let i = 0; i < keys.length - 1; i++) {
-                const key = keys[i];
-                if (!current[key]) current[key] = (isNaN(keys[i + 1])) ? {} : [];
-                current = current[key];
-            }
-            current[keys[keys.length - 1]] = value;
-            return obj;
-        }
-
-        // --- 3. UI LOGIC ---
-
-        function init() {
-            document.getElementById('source-json-view').innerHTML = syntaxHighlight(sourceData);
-            buildVisualNodes();
-            requestAnimationFrame(() => {
-                drawLines();
-                executeVisualMapping();
-                updateCodeEditor();
-            });
-            window.addEventListener('resize', drawLines);
-        }
-
-        // --- NEW: EDIT SOURCE JSON LOGIC ---
-        function editSource() {
-            document.getElementById('source-json-edit').value = JSON.stringify(sourceData, null, 2);
-            document.getElementById('source-view-container').classList.add('hidden');
-            document.getElementById('source-edit-container').classList.remove('hidden');
-            document.getElementById('btn-edit-source').classList.add('hidden');
-        }
-
-        function cancelEditSource() {
-            document.getElementById('source-edit-container').classList.add('hidden');
-            document.getElementById('source-view-container').classList.remove('hidden');
-            document.getElementById('btn-edit-source').classList.remove('hidden');
-        }
-
-        function saveEditSource() {
-            const btn = document.getElementById('btn-edit-source');
-            const textarea = document.getElementById('source-json-edit');
-            try {
-                // 1. Parse new JSON
-                const newJson = JSON.parse(textarea.value);
-                
-                // 2. Update global data state
-                sourceData = newJson;
-                
-                // 3. Update syntax-highlighted view
-                document.getElementById('source-json-view').innerHTML = syntaxHighlight(sourceData);
-                
-                // 4. Smart cleanup: Keep connections that still exist, delete invalid ones
-                const validSourcePaths = Object.keys(flattenObject(sourceData));
-                connections = connections.filter(c => validSourcePaths.includes(c.source));
-                
-                // 5. Rebuild visual nodes & lines based on NEW json
-                buildVisualNodes();
-                requestAnimationFrame(() => {
-                    drawLines();
-                    executeVisualMapping();
-                    updateCodeEditor();
-                });
-
-                // 6. Return to view mode
-                document.getElementById('source-edit-container').classList.add('hidden');
-                document.getElementById('source-view-container').classList.remove('hidden');
-                btn.classList.remove('hidden');
-                
-            } catch (err) {
-                // Quick inline error flash
-                textarea.classList.add('bg-red-50');
-                setTimeout(() => textarea.classList.remove('bg-red-50'), 400);
-                alert("Invalid JSON Format:\n" + err.message);
-            }
-        }
-
-        function switchTab(tab) {
-            const btnVisual = document.getElementById('tab-visual');
-            const btnCode = document.getElementById('tab-code');
-            const viewVisual = document.getElementById('view-visual');
-            const viewCode = document.getElementById('view-code');
-
-            if (tab === 'visual') {
-                btnVisual.className = "px-5 py-1.5 text-sm font-medium rounded-md bg-white shadow shadow-slate-200 text-blue-600 transition-all";
-                btnCode.className = "px-5 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
-                viewVisual.classList.remove('hidden');
-                viewCode.classList.add('hidden');
-                setTimeout(drawLines, 50); 
-            } else {
-                btnCode.className = "px-5 py-1.5 text-sm font-medium rounded-md bg-white shadow shadow-slate-200 text-blue-600 transition-all";
-                btnVisual.className = "px-5 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-800 transition-all";
-                viewCode.classList.remove('hidden');
-                viewVisual.classList.add('hidden');
-            }
-        }
-
-        // New Layout Panel Toggles
-        function togglePanel(side) {
-            panelState[side] = !panelState[side];
-            const panel = document.getElementById(`panel-${side}`);
-            const btn = document.getElementById(`btn-toggle-${side}`);
-            const isOpen = panelState[side];
-
-            if (isOpen) {
-                panel.classList.remove('w-0', 'min-w-0', 'border-none');
-                panel.classList.add('w-[28%]', 'min-w-[280px]');
-                if (side === 'source') panel.classList.add('border-r');
-                if (side === 'target') panel.classList.add('border-l');
-                
-                btn.classList.add('text-blue-600', 'bg-blue-50');
-                btn.classList.remove('text-slate-400', 'hover:bg-slate-100');
-            } else {
-                panel.classList.remove('w-[28%]', 'min-w-[280px]', 'border-r', 'border-l');
-                panel.classList.add('w-0', 'min-w-0', 'border-none');
-                
-                btn.classList.remove('text-blue-600', 'bg-blue-50');
-                btn.classList.add('text-slate-400', 'hover:bg-slate-100');
-            }
-
-            // Continuously redraw lines while CSS transition is happening (duration 300ms)
-            const start = Date.now();
-            const animationLoop = setInterval(() => {
-                drawLines();
-                if (Date.now() - start > 350) clearInterval(animationLoop);
-            }, 16); // roughly 60fps
-        }
-
-        // --- 4. VISUAL WIRING ENGINE ---
-
-        function addNewTargetPath() {
-            const input = document.getElementById('new-target-path');
-            const newPath = input.value.trim();
+        const transformData = (srcObj, mappingsArray) => {
+            let outObj = {};
             
-            // Only add if it's not empty and doesn't already exist
-            if (newPath && !targetPaths.includes(newPath)) {
-                targetPaths.push(newPath);
-                input.value = ''; 
-                
-                buildVisualNodes(); 
-                // Wait for DOM to render the new node, then redraw connection lines
-                requestAnimationFrame(() => {
-                    drawLines();
-                });
-            } else if (targetPaths.includes(newPath)) {
-                // Flash the input red if it's a duplicate path
-                input.classList.add('border-red-400', 'bg-red-50');
-                setTimeout(() => input.classList.remove('border-red-400', 'bg-red-50'), 400);
-            }
-        }
-
-        function buildVisualNodes() {
-            const flatSource = flattenObject(sourceData);
-            const sourceContainer = document.getElementById('source-nodes');
-            const targetContainer = document.getElementById('target-nodes');
+            const getVal = (obj, path) => {
+                const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
+                return normalizedPath.split('.').filter(Boolean).reduce((curr, part) => curr ? curr[part] : undefined, obj);
+            };
             
-            sourceContainer.innerHTML = '';
-            targetContainer.innerHTML = '';
+            const setVal = (obj, path, val) => {
+                const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+                let curr = outObj;
+                for (let i = 0; i < parts.length - 1; i++) {
+                    const part = parts[i];
+                    const nextPart = parts[i + 1];
+                    
+                    if (!curr[part]) {
+                        curr[part] = /^\d+$/.test(nextPart) ? [] : {};
+                    }
+                    curr = curr[part];
+                }
+                curr[parts[parts.length - 1]] = val;
+            };
 
-            Object.keys(flatSource).forEach(path => {
-                const val = flatSource[path];
-                const displayVal = String(val).length > 25 ? String(val).substring(0,25) + '...' : String(val);
-                const displayPath = truncateMiddle(path, 34);
-                
-                const div = document.createElement('div');
-                div.className = 'node-card source-node cursor-pointer flex justify-between items-center';
-                div.dataset.path = path;
-                div.onclick = () => handleNodeClick('source', path);
-                div.innerHTML = `
-                    <div class="flex flex-col pr-4 overflow-hidden w-full">
-                        <div class="text-[11px] font-mono font-medium text-slate-500 mb-1 leading-tight w-full" title="${path}">${displayPath}</div>
-                        <div class="text-xs font-semibold text-slate-700 truncate w-full">Val: <span class="font-mono font-normal text-blue-600 bg-blue-50/50 px-1 py-0.5 rounded">${displayVal}</span></div>
-                    </div>
-                    <div class="port"></div>
-                `;
-                sourceContainer.appendChild(div);
+            const castValue = (val, type) => {
+                if (val === null || val === undefined || type === 'unknown') return val;
+                switch(type) {
+                    case 'string': return typeof val === 'object' ? JSON.stringify(val) : String(val);
+                    case 'number': { const num = Number(val); return isNaN(num) ? val : num; }
+                    case 'boolean': return typeof val === 'string' ? (val.toLowerCase() === 'true' || val === '1') : Boolean(val);
+                    case 'array': return Array.isArray(val) ? val : [val];
+                    default: return val;
+                }
+            };
+
+            mappingsArray.forEach(m => {
+                let val = getVal(srcObj, m.source);
+                if (val !== undefined) {
+                    val = castValue(val, m.targetType);
+                    setVal(outObj, m.target, val);
+                }
             });
 
-            targetPaths.forEach(path => {
-                const displayPath = truncateMiddle(path, 34);
+            return outObj;
+        };
 
-                const div = document.createElement('div');
-                div.className = 'node-card target-node cursor-pointer flex items-center h-[56px]'; 
-                div.dataset.path = path;
-                div.onclick = () => handleNodeClick('target', path);
-                div.innerHTML = `
-                    <div class="port"></div>
-                    <div class="text-[12px] font-mono font-bold text-slate-700 pl-3 w-full truncate" title="${path}">${displayPath}</div>
-                `;
-                targetContainer.appendChild(div);
-            });
+        // --- DOM Elements & Event Listeners ---
+        const els = {
+            sourceJson: document.getElementById('source-json'),
+            sourceLines: document.getElementById('source-lines'),
+            targetJson: document.getElementById('target-json'),
+            targetLines: document.getElementById('target-lines'),
+            configJson: document.getElementById('config-json'),
+            configLines: document.getElementById('config-lines'),
+            outputJson: document.getElementById('output-json'),
+            outputLines: document.getElementById('output-lines'),
+            sandboxCode: document.getElementById('sandbox-code'),
+            sandboxLines: document.getElementById('sandbox-lines'),
+            testOutputJson: document.getElementById('test-output-json'),
+            testOutputLines: document.getElementById('test-output-lines'),
             
-            updateNodeClasses();
+            sourceTreeView: document.getElementById('source-tree-view'),
+            targetTreeView: document.getElementById('target-tree-view'),
+            mappingsList: document.getElementById('mappings-list'),
+            
+            canvasEmptyState: document.getElementById('canvas-empty-state'),
+            canvasMappings: document.getElementById('canvas-mappings'),
+            mappingCount: document.getElementById('mapping-count'),
+            footerMappingCount: document.getElementById('footer-mapping-count')
+        };
+
+        function setupTextarea(textareaEl, linesEl, stateKey) {
+            textareaEl.value = state[stateKey];
+            const update = () => {
+                state[stateKey] = textareaEl.value;
+                const lines = textareaEl.value.split('\n').length || 1;
+                linesEl.innerHTML = Array.from({length: Math.max(lines, 1)}).map((_, i) => `<div>${i + 1}</div>`).join('');
+            };
+            textareaEl.addEventListener('input', update);
+            textareaEl.addEventListener('scroll', () => { linesEl.scrollTop = textareaEl.scrollTop; });
+            update();
         }
 
-        function handleNodeClick(type, path) {
-            if (activeSelection.type === type && activeSelection.path === path) {
-                activeSelection = { type: null, path: null };
-                updateNodeClasses();
+        // Initialize Textareas
+        setupTextarea(els.sourceJson, els.sourceLines, 'sourceJson');
+        setupTextarea(els.targetJson, els.targetLines, 'targetJson');
+        setupTextarea(els.sandboxCode, els.sandboxLines, 'sandboxCode');
+
+        // Render Functions
+        function renderTree(side) {
+            const paths = side === 'source' ? state.sourcePaths : state.targetPaths;
+            const container = side === 'source' ? els.sourceTreeView : els.targetTreeView;
+            const selectedPath = side === 'source' ? state.selectedSource : state.selectedTarget;
+
+            if (!paths || paths.length === 0) {
+                container.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-gray-400">
+                        <i data-lucide="list-tree" class="w-8 h-8 mb-2 opacity-20"></i>
+                        <p class="text-sm">No data parsed</p>
+                    </div>`;
+                lucide.createIcons();
                 return;
             }
 
-            if (activeSelection.type === 'source' && type === 'target') {
-                createConnection(activeSelection.path, path);
-                activeSelection = { type: null, path: null };
-            } 
-            else if (activeSelection.type === 'target' && type === 'source') {
-                createConnection(path, activeSelection.path);
-                activeSelection = { type: null, path: null };
-            }
-            else {
-                activeSelection = { type, path };
-            }
-            updateNodeClasses();
-        }
+            let html = '';
+            paths.forEach(node => {
+                const indent = (node.path.split('.').length - 1) * 16;
+                const isSelected = selectedPath === node.path;
+                
+                let icon = 'circle', color = 'text-gray-400';
+                if (node.type === 'object') { icon = 'braces'; color = 'text-blue-500'; }
+                else if (node.type === 'array') { icon = 'brackets'; color = 'text-purple-500'; }
+                else if (node.type === 'string') { icon = 'type'; color = 'text-emerald-500'; }
+                else if (node.type === 'number') { icon = 'hash'; color = 'text-amber-500'; }
+                else if (node.type === 'boolean') { icon = 'toggle-left'; color = 'text-rose-500'; }
 
-        function createConnection(sourcePath, targetPath) {
-            connections = connections.filter(c => c.target !== targetPath);
-            connections.push({ source: sourcePath, target: targetPath });
-            drawLines();
-            updateCodeEditor();
-        }
+                const bgClass = isSelected ? 'bg-blue-50/50 border-blue-200' : 'border-transparent hover:bg-gray-100';
+                const textClass = isSelected ? 'text-blue-700 font-semibold' : 'text-gray-700';
 
-        function clearConnections() {
-            connections = [];
-            activeSelection = { type: null, path: null };
-            updateNodeClasses();
-            drawLines();
-            document.getElementById('target-json-view').innerHTML = "<span class='text-slate-500 italic'>// Cleared. Map is empty.</span>";
-            updateCodeEditor();
-        }
-
-        function updateNodeClasses() {
-            document.querySelectorAll('.node-card').forEach(el => {
-                el.classList.remove('selected', 'connected');
+                html += `
+                    <div onclick="handleSelectNode('${node.path}', '${side}')" 
+                         class="cursor-pointer rounded-md p-1.5 flex items-center gap-2 text-sm group border transition-colors ${bgClass}"
+                         style="margin-left: ${indent}px">
+                        <div class="w-3 h-3 rounded-full flex items-center justify-center ${color}">
+                            <div class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></div>
+                        </div>
+                        <span class="font-mono truncate ${textClass}">${node.key}</span>
+                        ${node.isLeaf ? `<span class="ml-auto text-[10px] text-gray-400 uppercase tracking-wider px-1.5 py-0.5 bg-gray-50 rounded">${node.type}</span>` : ''}
+                    </div>
+                `;
             });
 
-            if (activeSelection.path) {
-                const el = document.querySelector(`.node-card[data-path="${activeSelection.path}"]`);
-                if (el) el.classList.add('selected');
-            }
-
-            connections.forEach(conn => {
-                const srcEl = document.querySelector(`.source-node[data-path="${conn.source}"]`);
-                const tgtEl = document.querySelector(`.target-node[data-path="${conn.target}"]`);
-                if (srcEl) srcEl.classList.add('connected');
-                if (tgtEl) tgtEl.classList.add('connected');
-            });
+            container.innerHTML = html;
         }
 
-        function drawLines() {
-            const svg = document.getElementById('svg-canvas');
-            const filterDef = `<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.15" flood-color="#10b981"/></filter></defs>`;
-            svg.innerHTML = filterDef; 
-            
-            const containerBox = document.getElementById('visual-canvas-container').getBoundingClientRect();
+        function renderMappings() {
+            els.mappingCount.innerText = state.mappings.length;
+            els.footerMappingCount.innerText = state.mappings.length;
 
-            connections.forEach(conn => {
-                const srcEl = document.querySelector(`.source-node[data-path="${conn.source}"]`);
-                const tgtEl = document.querySelector(`.target-node[data-path="${conn.target}"]`);
+            if (state.mappings.length === 0) {
+                els.canvasEmptyState.classList.remove('hidden');
+                els.canvasMappings.classList.add('hidden');
+            } else {
+                els.canvasEmptyState.classList.add('hidden');
+                els.canvasMappings.classList.remove('hidden');
                 
-                if (!srcEl || !tgtEl) return;
-
-                const srcPort = srcEl.querySelector('.port').getBoundingClientRect();
-                const tgtPort = tgtEl.querySelector('.port').getBoundingClientRect();
-
-                const startX = srcPort.left - containerBox.left + (srcPort.width / 2);
-                const startY = srcPort.top - containerBox.top + (srcPort.height / 2);
-                
-                const endX = tgtPort.left - containerBox.left + (tgtPort.width / 2);
-                const endY = tgtPort.top - containerBox.top + (tgtPort.height / 2);
-
-                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                
-                const controlOffsetX = Math.max(70, Math.abs(endX - startX) * 0.4);
-                const d = `M ${startX} ${startY} C ${startX + controlOffsetX} ${startY}, ${endX - controlOffsetX} ${endY}, ${endX} ${endY}`;
-                
-                path.setAttribute("d", d);
-                path.setAttribute("fill", "none");
-                path.setAttribute("stroke", "#10b981"); 
-                path.setAttribute("stroke-width", "2.5");
-                path.setAttribute("stroke-linecap", "round");
-                path.setAttribute("filter", "url(#shadow)");
-                
-                svg.appendChild(path);
-            });
-        }
-
-        function executeVisualMapping() {
-            const resultObj = {};
-            
-            connections.forEach(conn => {
-                const value = getValueByPath(sourceData, conn.source);
-                if (value !== undefined) {
-                    setValueByPath(resultObj, conn.target, value);
-                }
-            });
-
-            document.getElementById('target-json-view').innerHTML = syntaxHighlight(resultObj);
-            
-            const panelWrapper = document.getElementById('panel-target').firstElementChild;
-            panelWrapper.style.backgroundColor = '#1e293b';
-            setTimeout(() => panelWrapper.style.backgroundColor = '', 200);
-        }
-
-        function updateCodeEditor() {
-            const tree = {};
-            
-            // Build the object tree based on visual connections
-            connections.forEach(conn => {
-                // Generate safe JS optional chaining paths (e.g., backendData?.trip?.[0]?.name)
-                const parts = conn.source.split('.');
-                let sourceExpr = 'backendData';
-                parts.forEach(p => {
-                    if (isNaN(p)) {
-                        sourceExpr += `?.${p}`;
+                let html = '';
+                state.mappings.forEach(m => {
+                    if (state.editingMappingId === m.id) {
+                        html += `
+                            <div class="flex flex-col bg-white border border-gray-200 rounded-lg p-2 shadow-sm gap-2">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold text-gray-400 w-12">SRC</span>
+                                    <input id="edit-src-${m.id}" class="flex-1 text-xs font-mono p-1 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value="${state.editSource}">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[10px] font-bold text-gray-400 w-12">TARGET</span>
+                                    <input id="edit-tgt-${m.id}" class="flex-1 text-xs font-mono p-1 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value="${state.editTarget}">
+                                </div>
+                                <div class="flex justify-end mt-1">
+                                    <button onclick="saveEditing('${m.id}')" class="flex items-center gap-1 bg-blue-500 text-white text-[10px] px-2 py-1 rounded hover:bg-blue-600">
+                                        <i data-lucide="check" class="w-3 h-3"></i> Save
+                                    </button>
+                                </div>
+                            </div>
+                        `;
                     } else {
-                        sourceExpr += `?.[${p}]`;
+                        html += `
+                            <div class="flex items-center justify-between text-xs bg-white border border-gray-200 rounded-lg p-2 shadow-sm transition-all">
+                                <div class="flex flex-col flex-1 truncate">
+                                    <span class="font-mono text-gray-600 truncate" title="${m.source}">${m.source.split('.').pop()}</span>
+                                    <span class="text-[9px] text-gray-400 uppercase tracking-wider">${m.sourceType}</span>
+                                </div>
+                                <i data-lucide="arrow-right" class="w-3 h-3 mx-2 text-gray-400 shrink-0"></i>
+                                <div class="flex flex-col flex-1 truncate text-right">
+                                    <span class="font-mono text-gray-600 truncate" title="${m.target}">${m.target.split('.').pop()}</span>
+                                    <span class="text-[9px] text-gray-400 uppercase tracking-wider">${m.targetType}</span>
+                                </div>
+                                <div class="flex items-center ml-3 shrink-0">
+                                    <button onclick="startEditing('${m.id}', '${m.source}', '${m.target}')" class="p-1 text-gray-400 hover:text-blue-500 transition-colors">
+                                        <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                    <button onclick="deleteMapping('${m.id}')" class="p-1 text-gray-400 hover:text-rose-500 transition-colors">
+                                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
                     }
                 });
+                els.mappingsList.innerHTML = html;
+                lucide.createIcons({ root: els.mappingsList });
+            }
 
-                // Traverse the target path and create nested objects/arrays
-                let normalizedTarget = conn.target.replace(/\[(\w+)\]/g, '.$1').replace(/^\./, '');
-                const tgtParts = normalizedTarget.split('.');
+            // Sync Config view
+            const configToSave = state.mappings.map(({ source, target, sourceType, targetType }) => ({ 
+                source, target, sourceType: sourceType || 'unknown', targetType: targetType || 'unknown' 
+            }));
+            els.configJson.value = state.mappings.length > 0 ? JSON.stringify(configToSave, null, 2) : '';
+            const configLinesCount = els.configJson.value.split('\n').length || 1;
+            els.configLines.innerHTML = Array.from({length: Math.max(configLinesCount, 1)}).map((_, i) => `<div>${i + 1}</div>`).join('');
+        }
+
+        function updateTabStyling(containerId, activeTabName) {
+            const container = document.getElementById(containerId);
+            const buttons = container.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => {
+                const isActive = btn.dataset.tab === activeTabName;
+                const icon = btn.querySelector('svg') || btn.querySelector('i');
+                if (isActive) {
+                    btn.className = 'tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]';
+                    if(icon) {
+                        icon.classList.remove('text-gray-400');
+                        icon.classList.add('text-blue-500');
+                    }
+                } else {
+                    btn.className = 'tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent';
+                    if(icon) {
+                        icon.classList.remove('text-blue-500');
+                        icon.classList.add('text-gray-400');
+                    }
+                }
+            });
+        }
+
+        // --- Action Handlers ---
+        function handleParseAll() {
+            try {
+                const sParsed = JSON.parse(state.sourceJson);
+                state.sourcePaths = flattenJSON(sParsed);
+                switchTab('source', 'tree');
+                renderTree('source');
+            } catch (e) {
+                showToast("Invalid Source JSON");
+            }
+            try {
+                const tParsed = JSON.parse(state.targetJson);
+                state.targetPaths = flattenJSON(tParsed);
+                switchTab('target', 'tree');
+                renderTree('target');
+            } catch (e) {
+                showToast("Invalid Target JSON");
+            }
+        }
+
+        function handleSelectNode(path, side) {
+            if (side === 'source') {
+                state.selectedSource = state.selectedSource === path ? null : path;
+            } else {
+                state.selectedTarget = state.selectedTarget === path ? null : path;
+            }
+            
+            renderTree('source');
+            renderTree('target');
+
+            if (state.selectedSource && state.selectedTarget) {
+                const exists = state.mappings.some(m => m.source === state.selectedSource && m.target === state.selectedTarget);
+                if (!exists) {
+                    const srcNode = state.sourcePaths.find(p => p.path === state.selectedSource);
+                    const tgtNode = state.targetPaths.find(p => p.path === state.selectedTarget);
+                    
+                    state.mappings.push({
+                        id: `m-${Date.now()}`,
+                        source: state.selectedSource,
+                        target: state.selectedTarget,
+                        sourceType: srcNode?.type || 'unknown',
+                        targetType: tgtNode?.type || 'unknown'
+                    });
+                }
+                state.selectedSource = null;
+                state.selectedTarget = null;
+                renderTree('source');
+                renderTree('target');
+                renderMappings();
+            }
+        }
+
+        function switchTab(group, tabName) {
+            if (group === 'source') {
+                state.activeSourceTab = tabName;
+                updateTabStyling('source-tabs', tabName);
+                document.getElementById('source-raw-view').classList.toggle('hidden', tabName !== 'raw');
+                document.getElementById('source-tree-view').classList.toggle('hidden', tabName !== 'tree');
+            } else if (group === 'target') {
+                state.activeTargetTab = tabName;
+                updateTabStyling('target-tabs', tabName);
+                document.getElementById('target-raw-view').classList.toggle('hidden', tabName !== 'raw');
+                document.getElementById('target-tree-view').classList.toggle('hidden', tabName !== 'tree');
+            } else if (group === 'center') {
+                state.activeCenterTab = tabName;
+                updateTabStyling('center-tabs', tabName);
+                document.getElementById('center-canvas-view').classList.toggle('hidden', tabName !== 'canvas');
+                document.getElementById('center-config-view').classList.toggle('hidden', tabName !== 'config');
+                document.getElementById('center-output-view').classList.toggle('hidden', tabName !== 'output');
+                document.getElementById('center-sandbox-view').classList.toggle('hidden', tabName !== 'sandbox');
+                // Ensure display flex is respected for sandbox
+                if (tabName === 'sandbox') {
+                    document.getElementById('center-sandbox-view').style.display = 'flex';
+                } else {
+                    document.getElementById('center-sandbox-view').style.display = '';
+                }
+            }
+        }
+
+        function handleGenerate() {
+            if (state.mappings.length === 0) {
+                showToast("Create mappings first.");
+                return;
+            }
+            try {
+                const srcObj = JSON.parse(state.sourceJson);
+                const outObj = transformData(srcObj, state.mappings);
+                
+                els.outputJson.value = JSON.stringify(outObj, null, 2);
+                const outLinesCount = els.outputJson.value.split('\n').length || 1;
+                els.outputLines.innerHTML = Array.from({length: Math.max(outLinesCount, 1)}).map((_, i) => `<div>${i + 1}</div>`).join('');
+                
+                switchTab('center', 'output');
+            } catch (e) {
+                showToast("Error generating payload. Ensure JSON is valid.");
+            }
+        }
+
+        // Inline Editing
+        function startEditing(id, src, tgt) {
+            state.editingMappingId = id;
+            state.editSource = src;
+            state.editTarget = tgt;
+            renderMappings();
+        }
+
+        function saveEditing(id) {
+            const newSrc = document.getElementById(`edit-src-${id}`).value;
+            const newTgt = document.getElementById(`edit-tgt-${id}`).value;
+            state.mappings = state.mappings.map(m => m.id === id ? { ...m, source: newSrc, target: newTgt } : m);
+            state.editingMappingId = null;
+            renderMappings();
+        }
+
+        function deleteMapping(id) {
+            state.mappings = state.mappings.filter(m => m.id !== id);
+            renderMappings();
+        }
+
+        function clearMappings() {
+            state.mappings = [];
+            renderMappings();
+        }
+
+        // Clipboard
+        function handleCopyConfig() {
+            if (state.mappings.length === 0) return;
+            const configToSave = state.mappings.map(({ source, target, sourceType, targetType }) => ({ 
+                source, target, sourceType: sourceType || 'unknown', targetType: targetType || 'unknown' 
+            }));
+            const textToCopy = JSON.stringify(configToSave, null, 2);
+            
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                document.getElementById('copy-icon').setAttribute('data-lucide', 'check-circle-2');
+                document.getElementById('copy-text').innerText = 'Copied!';
+                lucide.createIcons();
+                setTimeout(() => {
+                    document.getElementById('copy-icon').setAttribute('data-lucide', 'copy');
+                    document.getElementById('copy-text').innerText = 'Copy Config';
+                    lucide.createIcons();
+                }, 2000);
+            } catch (err) {
+                showToast("Failed to copy");
+            }
+            document.body.removeChild(textArea);
+        }
+
+        // Sandbox Engine
+        function loadActiveConfigIntoSandbox() {
+            const tree = {};
+            state.mappings.forEach(conn => {
+                const srcParts = conn.source.replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
+                let sourceExpr = 'backendData';
+                srcParts.forEach(p => {
+                    sourceExpr += isNaN(p) ? `?.${p}` : `?.[${p}]`;
+                });
+
+                const tgtParts = conn.target.replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
                 let current = tree;
                 for (let i = 0; i < tgtParts.length - 1; i++) {
                     const key = tgtParts[i];
-                    if (!current[key]) {
-                        current[key] = isNaN(tgtParts[i + 1]) ? {} : []; // Auto-detect arrays vs objects
-                    }
+                    if (!current[key]) current[key] = isNaN(tgtParts[i + 1]) ? {} : [];
                     current = current[key];
                 }
                 current[tgtParts[tgtParts.length - 1]] = sourceExpr;
             });
 
-            // Convert the object tree into nicely formatted JS source code
-            function stringifyTree(obj, indent) {
+            const stringifyTree = (obj, indent) => {
                 if (Array.isArray(obj)) {
                     if (obj.length === 0) return '[]';
                     let str = '[\n';
                     for (let i = 0; i < obj.length; i++) {
                         str += `${indent}  `;
                         const item = obj[i];
-                        if (item === undefined) {
-                            str += 'null';
-                        } else if (typeof item === 'object' && item !== null) {
-                            str += stringifyTree(item, indent + '  ');
-                        } else {
-                            str += item;
-                        }
+                        if (item === undefined) str += 'null';
+                        else if (typeof item === 'object' && item !== null) str += stringifyTree(item, indent + '  ');
+                        else str += item; 
                         if (i < obj.length - 1) str += ',';
                         str += '\n';
                     }
@@ -792,117 +754,47 @@ return mapData(sourceData);
                     str += `${indent}}`;
                     return str;
                 }
-            }
+            };
 
             const objectStr = stringifyTree(tree, '  ');
-
-            const finalCode = `// ⚠️ Auto-generated by Visual Mapper
-// Visual changes will automatically update this code.
-
-function mapData(backendData) {
-  return ${objectStr.trim()};
-}
-
-return mapData(sourceData);`;
-
-            document.getElementById('code-editor').value = finalCode;
-        }
-
-        // --- 5. CODE MAPPING ENGINE ---
-
-        function executeCodeMapping() {
-            const codeString = document.getElementById('code-editor').value;
-            const targetView = document.getElementById('target-json-view');
+            state.sandboxCode = `// ⚠️ Auto-generated from Visual Mappings\n// Edit this function to add advanced JS logic.\n\nfunction mapData(backendData) {\n  return ${objectStr.trim()};\n}\n\n// Execute the mapping against the inbound Source JSON\nreturn mapData(sourceData);`;
             
-            try {
-                const mapperFunc = new Function('sourceData', codeString);
-                const resultObj = mapperFunc(sourceData);
-                targetView.innerHTML = syntaxHighlight(resultObj);
+            els.sandboxCode.value = state.sandboxCode;
+            els.sandboxCode.dispatchEvent(new Event('input')); // Trigger line number update
+        }
 
-                const panelWrapper = document.getElementById('panel-target').firstElementChild;
-                panelWrapper.style.backgroundColor = '#1e293b';
-                setTimeout(() => panelWrapper.style.backgroundColor = '', 200);
-            } catch (err) {
-                targetView.innerHTML = `<span class="text-red-400 font-bold font-sans">Error executing script:</span>\n\n${err.message}`;
+        function handleSandboxRun() {
+            try {
+                const srcObj = JSON.parse(state.sourceJson);
+                const runner = new Function('sourceData', state.sandboxCode);
+                const outObj = runner(srcObj);
+                
+                els.testOutputJson.value = JSON.stringify(outObj, null, 2);
+                const outLinesCount = els.testOutputJson.value.split('\n').length || 1;
+                els.testOutputLines.innerHTML = Array.from({length: Math.max(outLinesCount, 1)}).map((_, i) => `<div>${i + 1}</div>`).join('');
+            } catch (e) {
+                showToast(`Sandbox Error: ${e.message}`);
             }
         }
 
-        // NEW: Advanced Bidirectional Sync (Code -> Visual)
-        function syncCodeToVisual() {
-            const codeString = document.getElementById('code-editor').value;
-            try {
-                const mapperFunc = new Function('sourceData', codeString);
-                
-                // 1. Create a deep JS Proxy to track path access inside user's custom JS code
-                function createPathRecorder(basePath = '') {
-                    return new Proxy({}, {
-                        get(target, prop) {
-                            if (prop === '___isPathRecorder') return true;
-                            if (prop === '___path') return basePath;
-                            if (typeof prop === 'symbol') return undefined;
-                            // Ignore internal JS property calls
-                            if (['toString', 'valueOf', 'toJSON', 'constructor', 'then'].includes(prop)) return undefined;
-                            
-                            const newPath = basePath ? `${basePath}.${prop}` : prop;
-                            return createPathRecorder(newPath);
-                        }
-                    });
-                }
-                
-                // 2. Pass the tracer proxy as 'sourceData' into the user's function
-                const mockBackend = createPathRecorder();
-                const resultTree = mapperFunc(mockBackend);
-                
-                let newConnections = [];
-                
-                // 3. Traverse the resulting object to find where the proxies ended up
-                function traverseAndExtract(obj, currentTargetPath = '') {
-                    if (!obj) return;
-                    
-                    if (typeof obj === 'object' && obj.___isPathRecorder) {
-                        newConnections.push({ source: obj.___path, target: currentTargetPath });
-                        // Add target path if it doesn't exist visually yet
-                        if (currentTargetPath && !targetPaths.includes(currentTargetPath)) {
-                            targetPaths.push(currentTargetPath);
-                        }
-                        return;
-                    }
-                    
-                    if (typeof obj === 'object') {
-                        for (let key in obj) {
-                            if (obj.hasOwnProperty(key)) {
-                                let nextPath = currentTargetPath 
-                                    ? (Array.isArray(obj) ? `${currentTargetPath}[${key}]` : `${currentTargetPath}.${key}`) 
-                                    : key;
-                                traverseAndExtract(obj[key], nextPath);
-                            }
-                        }
-                    }
-                }
-                
-                traverseAndExtract(resultTree);
-                
-                // 4. Update the visual mapper state
-                connections = newConnections;
-                buildVisualNodes();
-                requestAnimationFrame(() => {
-                    drawLines();
-                    executeVisualMapping();
-                });
-                
-                // Visual feedback success animation
-                const btn = document.querySelector('button[onclick="syncCodeToVisual()"]');
-                const origText = btn.innerHTML;
-                btn.innerHTML = `<span class="text-green-600 font-bold flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Synced!</span>`;
-                setTimeout(() => btn.innerHTML = origText, 1500);
+        // --- Init Events ---
+        document.querySelectorAll('#source-tabs .tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchTab('source', btn.dataset.tab));
+        });
+        document.querySelectorAll('#target-tabs .tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchTab('target', btn.dataset.tab));
+        });
+        document.querySelectorAll('#center-tabs .tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchTab('center', btn.dataset.tab));
+        });
 
-            } catch (err) {
-                console.error(err);
-                alert("Could not sync to Visual Mapper.\n\nEnsure your code returns a clean object mapping from 'sourceData' without complex logic that breaks the path tracer.\n\nError: " + err.message);
-            }
-        }
+        // Add synced scroll to readonly outputs
+        els.outputJson.addEventListener('scroll', () => { els.outputLines.scrollTop = els.outputJson.scrollTop; });
+        els.configJson.addEventListener('scroll', () => { els.configLines.scrollTop = els.configJson.scrollTop; });
+        els.testOutputJson.addEventListener('scroll', () => { els.testOutputLines.scrollTop = els.testOutputJson.scrollTop; });
 
-        window.onload = init;
+        // Initial setup
+        lucide.createIcons();
     </script>
 </body>
 </html>
