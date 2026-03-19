@@ -3,13 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON Visual Mapper</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <title>JSON Visual Mapper</title>    <script src="https://cdn.tailwindcss.com"></script>    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* Custom Scrollbar for a cleaner look */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -29,16 +24,40 @@
         }
     </style>
 </head>
-<body class="flex flex-col h-screen bg-[#fafafa] text-gray-800 font-sans overflow-hidden">
-
-    <!-- Toast Notification System -->
-    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white text-sm font-medium px-4 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-50 flex items-center gap-2">
+<body class="flex flex-col h-screen bg-[#fafafa] text-gray-800 font-sans overflow-hidden">    <div id="export-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-6" onclick="if(event.target===this) closeExportModal()">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[80vh] border border-gray-200">            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200 shrink-0">
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-900">Export Config Preview</h2>
+                    <p class="text-[11px] text-gray-400 mt-0.5">Review the JSON before downloading. This is what you store in your database.</p>
+                </div>
+                <button onclick="closeExportModal()" class="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-hidden flex font-mono text-[12.5px] leading-5 min-h-0" style="background:#1e1e1e">
+                <div id="export-modal-lines" class="w-10 shrink-0 border-r text-right pr-3 py-4 select-none overflow-hidden text-[11px] leading-5" style="background:#1e1e1e;border-color:#333;color:#555"></div>
+                <div id="export-modal-code" class="flex-1 overflow-auto p-4" style="color:#d4d4d4">
+                    <pre id="export-modal-highlighted" class="whitespace-pre" style="line-height:20px"></pre>
+                </div>
+            </div>
+            <div class="flex items-center justify-between px-5 py-3 border-t border-gray-200 shrink-0 bg-white rounded-b-2xl">
+                <span id="export-modal-meta" class="text-[11px] text-gray-400"></span>
+                <div class="flex items-center gap-2">
+                    <button onclick="closeExportModal()" class="px-4 py-1.5 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="downloadExportConfig()" class="flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-white bg-[#2563eb] hover:bg-blue-700 rounded-full transition-colors">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        Download
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white text-sm font-medium px-4 py-3 rounded-lg shadow-xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-50 flex items-center gap-2">
         <i data-lucide="info" class="w-4 h-4 text-blue-400"></i>
         <span id="toast-message"></span>
-    </div>
-
-    <!-- Header -->
-    <header class="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 shrink-0 select-none">
+    </div>    <header class="h-14 border-b border-gray-200 bg-white flex items-center justify-between px-4 shrink-0 select-none">
         <div class="flex items-center gap-3">
             <div class="bg-gray-900 text-white font-bold w-7 h-7 flex items-center justify-center rounded-md text-xs">
                 VM
@@ -51,23 +70,12 @@
         </div>
         
         <div class="flex items-center gap-3">
-            <button onclick="handleParseAll()" class="flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 px-4 py-1.5 rounded-full text-sm font-medium text-gray-700 transition-colors shadow-sm">
-                <i data-lucide="play" class="w-3.5 h-3.5 text-gray-500"></i>
-                <span>Parse All</span>
+            <button onclick="handleExportConfig()" class="flex items-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-full text-sm font-medium text-gray-700 transition-colors shadow-sm" title="Preview & export mapping config">
+                <i data-lucide="eye" class="w-3.5 h-3.5 text-gray-500"></i>
+                <span>Export Config</span>
             </button>
-            <button onclick="handleGenerate()" class="flex items-center gap-2 bg-[#2563eb] hover:bg-blue-700 px-5 py-1.5 rounded-full text-sm font-medium text-white transition-colors shadow-sm">
-                <span>Generate Payload</span>
-            </button>
-            <div class="w-px h-5 bg-gray-200 mx-1"></div>
-            <i data-lucide="settings" class="w-4.5 h-4.5 text-gray-400 hover:text-gray-600 cursor-pointer"></i>
         </div>
-    </header>
-
-    <!-- Main Workspace (Bento Box Layout) -->
-    <main class="flex-1 overflow-hidden relative p-3 pb-0 flex gap-3">
-        
-        <!-- LEFT PANE: Source JSON -->
-        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+    </header>    <main class="flex-1 overflow-hidden relative p-3 pb-0 flex gap-3">        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
             <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between">
                 <div class="flex items-center" id="source-tabs">
                     <button data-tab="raw" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
@@ -77,47 +85,29 @@
                         <i data-lucide="list-tree" class="w-4 h-4 text-gray-400"></i> Visual Tree
                     </button>
                 </div>
-                <i data-lucide="plus" class="w-4 h-4 text-gray-400 mx-2"></i>
             </div>
             
-            <div class="flex-1 overflow-hidden relative">
-                <!-- Source Raw -->
-                <div id="source-raw-view" class="absolute inset-0 flex">
+            <div class="flex-1 overflow-hidden relative">                <div id="source-raw-view" class="absolute inset-0 flex">
                     <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
                         <div id="source-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden" style="pointer-events: none"></div>
                         <textarea id="source-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" spellcheck="false" style="line-height: 21px"></textarea>
                     </div>
-                </div>
-                <!-- Source Tree -->
-                <div id="source-tree-view" class="absolute inset-0 hidden overflow-y-auto p-3 bg-[#fafafa]"></div>
+                </div>                <div id="source-tree-view" class="absolute inset-0 hidden overflow-y-auto p-3 bg-[#fafafa]"></div>
             </div>
-        </div>
-
-        <!-- CENTER PANE: Mapping Canvas & Sandbox Engine -->
-        <div class="flex-[1.5] flex flex-col min-w-[400px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+        </div>        <div class="flex-[1.5] flex flex-col min-w-[400px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
             <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between z-10">
                 <div class="flex items-center" id="center-tabs">
                     <button data-tab="canvas" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                         <i data-lucide="git-merge" class="w-4 h-4 text-blue-500"></i> Mapping
-                    </button>
-                    <button data-tab="config" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
-                        <i data-lucide="database" class="w-4 h-4 text-gray-400"></i> Config
-                    </button>
-                    <button data-tab="output" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
-                        <i data-lucide="code-2" class="w-4 h-4 text-gray-400"></i> Output
                     </button>
                     <div class="w-px h-5 bg-gray-200 mx-1"></div>
                     <button data-tab="sandbox" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent">
                         <i data-lucide="terminal" class="w-4 h-4 text-gray-400"></i> JS Sandbox
                     </button>
                 </div>
-                <i data-lucide="plus" class="w-4 h-4 text-gray-400 mx-2"></i>
             </div>
             
-            <div class="flex-1 relative overflow-hidden bg-[#fafafa]">
-                
-                <!-- Canvas View -->
-                <div id="center-canvas-view" class="absolute inset-0 flex flex-col items-center justify-center p-8 z-10">
+            <div class="flex-1 relative overflow-hidden bg-[#fafafa]">                <div id="center-canvas-view" class="absolute inset-0 flex flex-col items-center justify-center p-8 z-10">
                     <div id="canvas-empty-state" class="flex flex-col items-center justify-center text-center pointer-events-none transition-opacity">
                         <div class="w-16 h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mb-4 shadow-sm">
                             <i data-lucide="git-merge" class="w-7 h-7 text-gray-400"></i>
@@ -141,39 +131,15 @@
                                 </button>
                             </div>
                         </div>
-                        <div id="mappings-list" class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2">
-                            <!-- Mappings injected via JS -->
-                        </div>
+                        <div id="mappings-list" class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2">                        </div>
                     </div>
-                </div>
-
-                <!-- Config View -->
-                <div id="center-config-view" class="absolute inset-0 hidden">
-                    <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
-                        <div id="config-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
-                        <textarea id="config-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" readonly placeholder="[\n  // Active mapping configuration will appear here...\n]" spellcheck="false" style="line-height: 21px"></textarea>
-                    </div>
-                </div>
-
-                <!-- Output View -->
-                <div id="center-output-view" class="absolute inset-0 hidden">
-                    <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
-                        <div id="output-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
-                        <textarea id="output-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" readonly placeholder="// Generated payload will appear here..." spellcheck="false" style="line-height: 21px"></textarea>
-                    </div>
-                </div>
-
-                <!-- Sandbox View -->
-                <div id="center-sandbox-view" class="absolute inset-0 hidden flex-col relative">
+                </div>                <div id="center-sandbox-view" class="absolute inset-0 hidden flex-col relative">
                     <div class="flex-1 flex flex-col min-h-0 border-b border-gray-200">
                         <div class="bg-white px-3 py-1.5 flex items-center justify-between border-b border-gray-200 shrink-0 shadow-sm z-10">
                             <div>
                                 <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">JavaScript Execution Engine</span>
-                                <span class="text-[10px] text-gray-400">Map the global <code>sourceData</code> object</span>
+                                <span class="text-[10px] text-gray-400">Auto-synced from visual mappings · edit freely</span>
                             </div>
-                            <button onclick="loadActiveConfigIntoSandbox()" class="text-[11px] font-medium text-blue-600 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded transition-colors">
-                                Generate Setup
-                            </button>
                         </div>
                         <div class="flex-1 relative bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
                              <div id="sandbox-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
@@ -181,15 +147,17 @@
                         </div>
                     </div>
                     
-                    <div class="h-14 bg-[#f8f9fa] flex items-center justify-center border-b border-gray-200 shrink-0 shadow-sm z-10">
+                    <div class="bg-[#f8f9fa] flex flex-col items-center justify-center border-b border-gray-200 shrink-0 shadow-sm z-10 py-2 gap-1.5">
                         <button onclick="handleSandboxRun()" class="flex items-center gap-2 bg-emerald-500 text-white px-6 py-2 rounded-full hover:bg-emerald-600 text-xs font-bold transition-all shadow-sm transform hover:scale-105">
                             <i data-lucide="play" class="w-3.5 h-3.5 fill-current"></i> Execute Script
                         </button>
+                        <div id="sandbox-error" class="hidden text-[11px] text-rose-600 font-mono bg-rose-50 border border-rose-200 rounded px-3 py-1 max-w-full text-center"></div>
                     </div>
                     
                     <div class="flex-1 flex flex-col min-h-0">
-                        <div class="bg-white px-3 py-1.5 border-b border-gray-200 shrink-0 shadow-sm z-10">
+                        <div class="bg-white px-3 py-1.5 border-b border-gray-200 shrink-0 shadow-sm z-10 flex items-center justify-between">
                             <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Output: Generated JSON</span>
+                            <span id="exec-time" class="text-[10px] text-emerald-600 font-mono"></span>
                         </div>
                         <div class="flex-1 relative bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
                              <div id="test-output-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
@@ -199,10 +167,7 @@
                 </div>
 
             </div>
-        </div>
-
-        <!-- RIGHT PANE: Target JSON -->
-        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+        </div>        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
             <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between">
                 <div class="flex items-center" id="target-tabs">
                     <button data-tab="raw" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
@@ -212,45 +177,26 @@
                         <i data-lucide="list-tree" class="w-4 h-4 text-gray-400"></i> Visual Tree
                     </button>
                 </div>
-                <i data-lucide="plus" class="w-4 h-4 text-gray-400 mx-2"></i>
             </div>
             
-            <div class="flex-1 overflow-hidden relative">
-                 <!-- Target Raw -->
-                 <div id="target-raw-view" class="absolute inset-0 flex">
+            <div class="flex-1 overflow-hidden relative">                 <div id="target-raw-view" class="absolute inset-0 flex">
                     <div class="relative w-full h-full bg-[#fafafa] font-mono text-[13px] leading-[21px] flex overflow-hidden">
                         <div id="target-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden" style="pointer-events: none"></div>
                         <textarea id="target-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" spellcheck="false" style="line-height: 21px"></textarea>
                     </div>
-                </div>
-                <!-- Target Tree -->
-                <div id="target-tree-view" class="absolute inset-0 hidden overflow-y-auto p-3 bg-[#fafafa]"></div>
+                </div>                <div id="target-tree-view" class="absolute inset-0 hidden overflow-y-auto p-3 bg-[#fafafa]"></div>
             </div>
         </div>
 
-    </main>
-    
-    <!-- Footer -->
-    <footer class="h-8 border-t border-gray-200 bg-[#fafafa] flex items-center justify-between px-4 text-[11px] font-medium text-gray-500 select-none">
-        <div class="flex items-center gap-4">
-            <div class="flex items-center gap-1.5 hover:text-gray-800 cursor-pointer">
-                <i data-lucide="terminal" class="w-3.5 h-3.5"></i>
-                <span>Console</span>
-            </div>
-        </div>
-        <div class="flex items-center gap-5">
-            <span><span id="footer-mapping-count">0</span> Mappings Active</span>
-            <span>UTF-8</span>
-            <span class="flex items-center gap-1.5 text-gray-700">
-                <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                Vanilla JS Environment
-            </span>
-        </div>
+    </main>    <footer class="h-8 border-t border-gray-200 bg-[#fafafa] flex items-center justify-end px-4 text-[11px] font-medium text-gray-500 select-none gap-5">
+        <span><span id="footer-mapping-count">0</span> Mappings Active</span>
+        <span class="flex items-center gap-1.5 text-gray-700">
+            <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+            Vanilla JS
+        </span>
     </footer>
 
-    <!-- Application Logic -->
     <script>
-        // --- State Management ---
         const state = {
             sourceJson: `{\n  "bookingPlatform": {\n    "platformId": "TRV-ENT-90821",\n    "generatedAt": "2026-03-11T09:15:22Z",\n    "trip": {\n      "tripId": "TRIP-772991",\n      "status": "confirmed",\n      "purpose": "business-conference",\n      "travelers": [\n        {\n          "travelerId": "EMP-9912",\n          "profile": {\n            "name": "Rahul Sharma",\n            "department": "Engineering"\n          }\n        }\n      ],\n      "itinerary": {\n        "flights": [\n          {\n            "airline": {\n              "name": "Air India"\n            },\n            "flightNumber": "AI302",\n            "departure": {\n              "airport": "BOM",\n              "city": "Mumbai"\n            },\n            "arrival": {\n              "airport": "SIN",\n              "city": "Singapore"\n            },\n            "cabin": "business"\n          }\n        ],\n        "hotels": [\n          {\n            "hotel": {\n              "name": "Marina Bay Grand Hotel"\n            },\n            "stay": {\n              "checkIn": "2026-04-04",\n              "checkOut": "2026-04-08",\n              "roomType": "executive-suite"\n            }\n          }\n        ]\n      },\n      "pricing": {\n        "currency": "USD",\n        "total": 2726.55\n      }\n    }\n  }\n}`,
             targetJson: `{\n  "expenseReport": {\n    "employeeId": "",\n    "employeeName": "",\n    "travelReason": "",\n    "costDetails": {\n      "amount": 0,\n      "currencyCode": ""\n    },\n    "flightInfo": {\n      "carrier": "",\n      "origin": "",\n      "destination": ""\n    }\n  }\n}`,
@@ -262,15 +208,14 @@
             selectedSource: null,
             selectedTarget: null,
             mappings: [],
-            outputJson: '',
-            sandboxCode: '// Click "Generate Setup" to translate visual mappings into JS Code.\n// Or write custom JS here to process the payload!\n\nfunction mapData(backendData) {\n  return {\n    // your mapping logic\n  };\n}\n\nreturn mapData(sourceData);',
-            testOutputJson: '',
+            sandboxCode: '',
             editingMappingId: null,
             editSource: '',
-            editTarget: ''
+            editTarget: '',
+            collapsedSourcePaths: new Set(),
+            collapsedTargetPaths: new Set()
         };
 
-        // --- Utility Functions ---
         function showToast(message) {
             const toast = document.getElementById('toast');
             document.getElementById('toast-message').innerText = message;
@@ -325,61 +270,11 @@
             return paths;
         };
 
-        const transformData = (srcObj, mappingsArray) => {
-            let outObj = {};
-            
-            const getVal = (obj, path) => {
-                const normalizedPath = path.replace(/\[(\d+)\]/g, '.$1');
-                return normalizedPath.split('.').filter(Boolean).reduce((curr, part) => curr ? curr[part] : undefined, obj);
-            };
-            
-            const setVal = (obj, path, val) => {
-                const parts = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
-                let curr = outObj;
-                for (let i = 0; i < parts.length - 1; i++) {
-                    const part = parts[i];
-                    const nextPart = parts[i + 1];
-                    
-                    if (!curr[part]) {
-                        curr[part] = /^\d+$/.test(nextPart) ? [] : {};
-                    }
-                    curr = curr[part];
-                }
-                curr[parts[parts.length - 1]] = val;
-            };
-
-            const castValue = (val, type) => {
-                if (val === null || val === undefined || type === 'unknown') return val;
-                switch(type) {
-                    case 'string': return typeof val === 'object' ? JSON.stringify(val) : String(val);
-                    case 'number': { const num = Number(val); return isNaN(num) ? val : num; }
-                    case 'boolean': return typeof val === 'string' ? (val.toLowerCase() === 'true' || val === '1') : Boolean(val);
-                    case 'array': return Array.isArray(val) ? val : [val];
-                    default: return val;
-                }
-            };
-
-            mappingsArray.forEach(m => {
-                let val = getVal(srcObj, m.source);
-                if (val !== undefined) {
-                    val = castValue(val, m.targetType);
-                    setVal(outObj, m.target, val);
-                }
-            });
-
-            return outObj;
-        };
-
-        // --- DOM Elements & Event Listeners ---
         const els = {
             sourceJson: document.getElementById('source-json'),
             sourceLines: document.getElementById('source-lines'),
             targetJson: document.getElementById('target-json'),
             targetLines: document.getElementById('target-lines'),
-            configJson: document.getElementById('config-json'),
-            configLines: document.getElementById('config-lines'),
-            outputJson: document.getElementById('output-json'),
-            outputLines: document.getElementById('output-lines'),
             sandboxCode: document.getElementById('sandbox-code'),
             sandboxLines: document.getElementById('sandbox-lines'),
             testOutputJson: document.getElementById('test-output-json'),
@@ -388,7 +283,6 @@
             sourceTreeView: document.getElementById('source-tree-view'),
             targetTreeView: document.getElementById('target-tree-view'),
             mappingsList: document.getElementById('mappings-list'),
-            
             canvasEmptyState: document.getElementById('canvas-empty-state'),
             canvasMappings: document.getElementById('canvas-mappings'),
             mappingCount: document.getElementById('mapping-count'),
@@ -407,16 +301,72 @@
             update();
         }
 
-        // Initialize Textareas
+        function debounce(fn, ms) {
+            let timer;
+            return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+        }
+
+        function autoParse(side) {
+            const textarea = side === 'source' ? els.sourceJson : els.targetJson;
+            const json = textarea.value.trim();
+            if (!json) return;
+            try {
+                const parsed = JSON.parse(json);
+                if (side === 'source') {
+                    const wasUnparsed = state.sourcePaths.length === 0;
+                    state.sourcePaths = flattenJSON(parsed);
+                    renderTree('source');
+                    if (wasUnparsed || state.activeSourceTab === 'tree') {
+                        switchTab('source', 'tree');
+                    }
+                } else {
+                    const wasUnparsed = state.targetPaths.length === 0;
+                    state.targetPaths = flattenJSON(parsed);
+                    renderTree('target');
+                    if (wasUnparsed || state.activeTargetTab === 'tree') {
+                        switchTab('target', 'tree');
+                    }
+                }
+                textarea.classList.remove('border-rose-300');
+                textarea.classList.add('border-transparent');
+            } catch (e) {
+                textarea.classList.add('border-rose-300');
+                textarea.classList.remove('border-transparent');
+            }
+        }
+
+        const debouncedParseSource = debounce(() => autoParse('source'), 400);
+        const debouncedParseTarget = debounce(() => autoParse('target'), 400);
+
         setupTextarea(els.sourceJson, els.sourceLines, 'sourceJson');
         setupTextarea(els.targetJson, els.targetLines, 'targetJson');
         setupTextarea(els.sandboxCode, els.sandboxLines, 'sandboxCode');
 
-        // Render Functions
+        els.sourceJson.addEventListener('input', debouncedParseSource);
+        els.targetJson.addEventListener('input', debouncedParseTarget);
+
+        function getPathDepth(path) {
+            return path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean).length - 1;
+        }
+
+        function toggleCollapse(path, side) {
+            const collapsed = side === 'source' ? state.collapsedSourcePaths : state.collapsedTargetPaths;
+            if (collapsed.has(path)) {
+                collapsed.delete(path);
+            } else {
+                collapsed.add(path);
+            }
+            renderTree(side);
+        }
+
         function renderTree(side) {
             const paths = side === 'source' ? state.sourcePaths : state.targetPaths;
             const container = side === 'source' ? els.sourceTreeView : els.targetTreeView;
             const selectedPath = side === 'source' ? state.selectedSource : state.selectedTarget;
+            const collapsed = side === 'source' ? state.collapsedSourcePaths : state.collapsedTargetPaths;
+            const mappedPaths = side === 'source'
+                ? new Set(state.mappings.map(m => m.source))
+                : new Set(state.mappings.map(m => m.target));
 
             if (!paths || paths.length === 0) {
                 container.innerHTML = `
@@ -430,101 +380,134 @@
 
             let html = '';
             paths.forEach(node => {
-                const indent = (node.path.split('.').length - 1) * 16;
-                const isSelected = selectedPath === node.path;
-                
-                let icon = 'circle', color = 'text-gray-400';
-                if (node.type === 'object') { icon = 'braces'; color = 'text-blue-500'; }
-                else if (node.type === 'array') { icon = 'brackets'; color = 'text-purple-500'; }
-                else if (node.type === 'string') { icon = 'type'; color = 'text-emerald-500'; }
-                else if (node.type === 'number') { icon = 'hash'; color = 'text-amber-500'; }
-                else if (node.type === 'boolean') { icon = 'toggle-left'; color = 'text-rose-500'; }
+                const isHidden = [...collapsed].some(cp =>
+                    node.path !== cp && (node.path.startsWith(cp + '.') || node.path.startsWith(cp + '['))
+                );
+                if (isHidden) return;
 
-                const bgClass = isSelected ? 'bg-blue-50/50 border-blue-200' : 'border-transparent hover:bg-gray-100';
+                const depth = getPathDepth(node.path);
+                const indent = depth * 16;
+                const isSelected = selectedPath === node.path;
+                const isMapped = mappedPaths.has(node.path);
+                const isCollapsible = node.type === 'object' || node.type === 'array';
+                const isCollapsed = collapsed.has(node.path);
+
+                let color = 'text-gray-400';
+                if (node.type === 'object') color = 'text-blue-500';
+                else if (node.type === 'array') color = 'text-purple-500';
+                else if (node.type === 'string') color = 'text-emerald-500';
+                else if (node.type === 'number') color = 'text-amber-500';
+                else if (node.type === 'boolean') color = 'text-rose-500';
+
+                const bgClass = isSelected
+                    ? 'bg-blue-50/50 border-blue-200'
+                    : isMapped
+                        ? 'bg-emerald-50/50 border-emerald-100'
+                        : 'border-transparent hover:bg-gray-100';
                 const textClass = isSelected ? 'text-blue-700 font-semibold' : 'text-gray-700';
 
+                const collapseBtn = isCollapsible
+                    ? `<div onclick="event.stopPropagation(); toggleCollapse('${node.path}', '${side}')" class="p-0.5 rounded hover:bg-gray-200 shrink-0 cursor-pointer flex items-center justify-center w-4 h-4">
+                           <i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="w-3 h-3 text-gray-400"></i>
+                       </div>`
+                    : '<div class="w-4 h-4 shrink-0"></div>';
+
+                const mappedDot = isMapped
+                    ? `<div class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" title="Mapped field"></div>`
+                    : '';
+
+                const mappedTitle = isMapped
+                    ? (side === 'source'
+                        ? state.mappings.filter(m => m.source === node.path).map(m => '→ ' + m.target).join(', ')
+                        : state.mappings.filter(m => m.target === node.path).map(m => m.source + ' →').join(', '))
+                    : node.path;
+
                 html += `
-                    <div onclick="handleSelectNode('${node.path}', '${side}')" 
-                         class="cursor-pointer rounded-md p-1.5 flex items-center gap-2 text-sm group border transition-colors ${bgClass}"
-                         style="margin-left: ${indent}px">
-                        <div class="w-3 h-3 rounded-full flex items-center justify-center ${color}">
+                    <div onclick="handleSelectNode('${node.path}', '${side}')"
+                         class="cursor-pointer rounded-md p-1.5 flex items-center gap-1.5 text-sm group border transition-colors ${bgClass}"
+                         style="margin-left: ${indent}px"
+                         title="${mappedTitle}">
+                        ${collapseBtn}
+                        <div class="w-3 h-3 rounded-full flex items-center justify-center ${color} shrink-0">
                             <div class="w-1.5 h-1.5 rounded-full bg-current opacity-70"></div>
                         </div>
-                        <span class="font-mono truncate ${textClass}">${node.key}</span>
-                        ${node.isLeaf ? `<span class="ml-auto text-[10px] text-gray-400 uppercase tracking-wider px-1.5 py-0.5 bg-gray-50 rounded">${node.type}</span>` : ''}
+                        <span class="font-mono truncate flex-1 ${textClass}">${node.key}</span>
+                        ${mappedDot}
+                        ${node.isLeaf ? `<span class="text-[10px] text-gray-400 uppercase tracking-wider px-1.5 py-0.5 bg-gray-50 rounded shrink-0">${node.type}</span>` : ''}
                     </div>
                 `;
             });
 
             container.innerHTML = html;
+            lucide.createIcons({ root: container });
         }
 
-        function renderMappings() {
+        function renderMappingsList() {
             els.mappingCount.innerText = state.mappings.length;
             els.footerMappingCount.innerText = state.mappings.length;
 
             if (state.mappings.length === 0) {
                 els.canvasEmptyState.classList.remove('hidden');
                 els.canvasMappings.classList.add('hidden');
-            } else {
-                els.canvasEmptyState.classList.add('hidden');
-                els.canvasMappings.classList.remove('hidden');
-                
-                let html = '';
-                state.mappings.forEach(m => {
-                    if (state.editingMappingId === m.id) {
-                        html += `
-                            <div class="flex flex-col bg-white border border-gray-200 rounded-lg p-2 shadow-sm gap-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-bold text-gray-400 w-12">SRC</span>
-                                    <input id="edit-src-${m.id}" class="flex-1 text-xs font-mono p-1 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value="${state.editSource}">
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-bold text-gray-400 w-12">TARGET</span>
-                                    <input id="edit-tgt-${m.id}" class="flex-1 text-xs font-mono p-1 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value="${state.editTarget}">
-                                </div>
-                                <div class="flex justify-end mt-1">
-                                    <button onclick="saveEditing('${m.id}')" class="flex items-center gap-1 bg-blue-500 text-white text-[10px] px-2 py-1 rounded hover:bg-blue-600">
-                                        <i data-lucide="check" class="w-3 h-3"></i> Save
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        html += `
-                            <div class="flex items-center justify-between text-xs bg-white border border-gray-200 rounded-lg p-2 shadow-sm transition-all">
-                                <div class="flex flex-col flex-1 truncate">
-                                    <span class="font-mono text-gray-600 truncate" title="${m.source}">${m.source.split('.').pop()}</span>
-                                    <span class="text-[9px] text-gray-400 uppercase tracking-wider">${m.sourceType}</span>
-                                </div>
-                                <i data-lucide="arrow-right" class="w-3 h-3 mx-2 text-gray-400 shrink-0"></i>
-                                <div class="flex flex-col flex-1 truncate text-right">
-                                    <span class="font-mono text-gray-600 truncate" title="${m.target}">${m.target.split('.').pop()}</span>
-                                    <span class="text-[9px] text-gray-400 uppercase tracking-wider">${m.targetType}</span>
-                                </div>
-                                <div class="flex items-center ml-3 shrink-0">
-                                    <button onclick="startEditing('${m.id}', '${m.source}', '${m.target}')" class="p-1 text-gray-400 hover:text-blue-500 transition-colors">
-                                        <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
-                                    </button>
-                                    <button onclick="deleteMapping('${m.id}')" class="p-1 text-gray-400 hover:text-rose-500 transition-colors">
-                                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    }
-                });
-                els.mappingsList.innerHTML = html;
-                lucide.createIcons({ root: els.mappingsList });
+                return;
             }
 
-            // Sync Config view
-            const configToSave = state.mappings.map(({ source, target, sourceType, targetType }) => ({ 
-                source, target, sourceType: sourceType || 'unknown', targetType: targetType || 'unknown' 
-            }));
-            els.configJson.value = state.mappings.length > 0 ? JSON.stringify(configToSave, null, 2) : '';
-            const configLinesCount = els.configJson.value.split('\n').length || 1;
-            els.configLines.innerHTML = Array.from({length: Math.max(configLinesCount, 1)}).map((_, i) => `<div>${i + 1}</div>`).join('');
+            els.canvasEmptyState.classList.add('hidden');
+            els.canvasMappings.classList.remove('hidden');
+
+            let html = '';
+            state.mappings.forEach(m => {
+                if (state.editingMappingId === m.id) {
+                    html += `
+                        <div class="flex flex-col bg-white border border-gray-200 rounded-lg p-2 shadow-sm gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-gray-400 w-12">SRC</span>
+                                <input id="edit-src-${m.id}" class="flex-1 text-xs font-mono p-1 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value="${state.editSource}">
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-[10px] font-bold text-gray-400 w-12">TARGET</span>
+                                <input id="edit-tgt-${m.id}" class="flex-1 text-xs font-mono p-1 border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value="${state.editTarget}">
+                            </div>
+                            <div class="flex justify-end mt-1">
+                                <button onclick="saveEditing('${m.id}')" class="flex items-center gap-1 bg-blue-500 text-white text-[10px] px-2 py-1 rounded hover:bg-blue-600">
+                                    <i data-lucide="check" class="w-3 h-3"></i> Save
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="flex items-center justify-between text-xs bg-white border border-gray-200 rounded-lg p-2 shadow-sm transition-all">
+                            <div class="flex flex-col flex-1 truncate">
+                                <span class="font-mono text-gray-600 truncate" title="${m.source}">${m.source.split('.').pop()}</span>
+                                <span class="text-[9px] text-gray-400 uppercase tracking-wider">${m.sourceType}</span>
+                            </div>
+                            <i data-lucide="arrow-right" class="w-3 h-3 mx-2 text-gray-400 shrink-0"></i>
+                            <div class="flex flex-col flex-1 truncate text-right">
+                                <span class="font-mono text-gray-600 truncate" title="${m.target}">${m.target.split('.').pop()}</span>
+                                <span class="text-[9px] text-gray-400 uppercase tracking-wider">${m.targetType}</span>
+                            </div>
+                            <div class="flex items-center ml-3 shrink-0">
+                                <button onclick="startEditing('${m.id}', '${m.source}', '${m.target}')" class="p-1 text-gray-400 hover:text-blue-500 transition-colors">
+                                    <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                                <button onclick="deleteMapping('${m.id}')" class="p-1 text-gray-400 hover:text-rose-500 transition-colors">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            els.mappingsList.innerHTML = html;
+            lucide.createIcons({ root: els.mappingsList });
+        }
+
+        function renderMappings() {
+            renderMappingsList();
+            if (state.sourcePaths.length > 0) renderTree('source');
+            if (state.targetPaths.length > 0) renderTree('target');
+            loadActiveConfigIntoSandbox();
         }
 
         function updateTabStyling(containerId, activeTabName) {
@@ -549,42 +532,18 @@
             });
         }
 
-        // --- Action Handlers ---
-        function handleParseAll() {
-            try {
-                const sParsed = JSON.parse(state.sourceJson);
-                state.sourcePaths = flattenJSON(sParsed);
-                switchTab('source', 'tree');
-                renderTree('source');
-            } catch (e) {
-                showToast("Invalid Source JSON");
-            }
-            try {
-                const tParsed = JSON.parse(state.targetJson);
-                state.targetPaths = flattenJSON(tParsed);
-                switchTab('target', 'tree');
-                renderTree('target');
-            } catch (e) {
-                showToast("Invalid Target JSON");
-            }
-        }
-
         function handleSelectNode(path, side) {
             if (side === 'source') {
                 state.selectedSource = state.selectedSource === path ? null : path;
             } else {
                 state.selectedTarget = state.selectedTarget === path ? null : path;
             }
-            
-            renderTree('source');
-            renderTree('target');
 
             if (state.selectedSource && state.selectedTarget) {
                 const exists = state.mappings.some(m => m.source === state.selectedSource && m.target === state.selectedTarget);
                 if (!exists) {
                     const srcNode = state.sourcePaths.find(p => p.path === state.selectedSource);
                     const tgtNode = state.targetPaths.find(p => p.path === state.selectedTarget);
-                    
                     state.mappings.push({
                         id: `m-${Date.now()}`,
                         source: state.selectedSource,
@@ -595,9 +554,10 @@
                 }
                 state.selectedSource = null;
                 state.selectedTarget = null;
+                renderMappings();
+            } else {
                 renderTree('source');
                 renderTree('target');
-                renderMappings();
             }
         }
 
@@ -616,10 +576,7 @@
                 state.activeCenterTab = tabName;
                 updateTabStyling('center-tabs', tabName);
                 document.getElementById('center-canvas-view').classList.toggle('hidden', tabName !== 'canvas');
-                document.getElementById('center-config-view').classList.toggle('hidden', tabName !== 'config');
-                document.getElementById('center-output-view').classList.toggle('hidden', tabName !== 'output');
                 document.getElementById('center-sandbox-view').classList.toggle('hidden', tabName !== 'sandbox');
-                // Ensure display flex is respected for sandbox
                 if (tabName === 'sandbox') {
                     document.getElementById('center-sandbox-view').style.display = 'flex';
                 } else {
@@ -628,31 +585,11 @@
             }
         }
 
-        function handleGenerate() {
-            if (state.mappings.length === 0) {
-                showToast("Create mappings first.");
-                return;
-            }
-            try {
-                const srcObj = JSON.parse(state.sourceJson);
-                const outObj = transformData(srcObj, state.mappings);
-                
-                els.outputJson.value = JSON.stringify(outObj, null, 2);
-                const outLinesCount = els.outputJson.value.split('\n').length || 1;
-                els.outputLines.innerHTML = Array.from({length: Math.max(outLinesCount, 1)}).map((_, i) => `<div>${i + 1}</div>`).join('');
-                
-                switchTab('center', 'output');
-            } catch (e) {
-                showToast("Error generating payload. Ensure JSON is valid.");
-            }
-        }
-
-        // Inline Editing
         function startEditing(id, src, tgt) {
             state.editingMappingId = id;
             state.editSource = src;
             state.editTarget = tgt;
-            renderMappings();
+            renderMappingsList();
         }
 
         function saveEditing(id) {
@@ -673,7 +610,6 @@
             renderMappings();
         }
 
-        // Clipboard
         function handleCopyConfig() {
             if (state.mappings.length === 0) return;
             const configToSave = state.mappings.map(({ source, target, sourceType, targetType }) => ({ 
@@ -702,12 +638,11 @@
             document.body.removeChild(textArea);
         }
 
-        // Sandbox Engine
         function loadActiveConfigIntoSandbox() {
             const tree = {};
             state.mappings.forEach(conn => {
                 const srcParts = conn.source.replace(/\[(\w+)\]/g, '.$1').split('.').filter(Boolean);
-                let sourceExpr = 'backendData';
+                let sourceExpr = 'sourceData';
                 srcParts.forEach(p => {
                     sourceExpr += isNaN(p) ? `?.${p}` : `?.[${p}]`;
                 });
@@ -757,27 +692,118 @@
             };
 
             const objectStr = stringifyTree(tree, '  ');
-            state.sandboxCode = `// ⚠️ Auto-generated from Visual Mappings\n// Edit this function to add advanced JS logic.\n\nfunction mapData(backendData) {\n  return ${objectStr.trim()};\n}\n\n// Execute the mapping against the inbound Source JSON\nreturn mapData(sourceData);`;
+            state.sandboxCode = `// Auto-generated from Visual Mappings.\n// Store this function in your database and execute it at runtime:\n//   new Function('sourceData', code + '\\nreturn transform(sourceData);')(incomingData)\n\nfunction transform(sourceData) {\n  return ${objectStr.trim()};\n}\n\nreturn transform(sourceData);`;
             
             els.sandboxCode.value = state.sandboxCode;
-            els.sandboxCode.dispatchEvent(new Event('input')); // Trigger line number update
+            els.sandboxCode.dispatchEvent(new Event('input'));
         }
 
         function handleSandboxRun() {
+            const errorEl = document.getElementById('sandbox-error');
+            const execTimeEl = document.getElementById('exec-time');
+            errorEl.classList.add('hidden');
+            errorEl.textContent = '';
+            execTimeEl.textContent = '';
+
+            let srcObj;
             try {
-                const srcObj = JSON.parse(state.sourceJson);
+                srcObj = JSON.parse(state.sourceJson);
+            } catch (e) {
+                errorEl.textContent = 'Source JSON parse error: ' + e.message;
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const t0 = performance.now();
                 const runner = new Function('sourceData', state.sandboxCode);
                 const outObj = runner(srcObj);
-                
+                const elapsed = (performance.now() - t0).toFixed(1);
+
+                execTimeEl.textContent = `${elapsed}ms`;
                 els.testOutputJson.value = JSON.stringify(outObj, null, 2);
                 const outLinesCount = els.testOutputJson.value.split('\n').length || 1;
                 els.testOutputLines.innerHTML = Array.from({length: Math.max(outLinesCount, 1)}).map((_, i) => `<div>${i + 1}</div>`).join('');
             } catch (e) {
-                showToast(`Sandbox Error: ${e.message}`);
+                const lineMatch = e.stack && e.stack.match(/<anonymous>:(\d+):(\d+)/);
+                const location = lineMatch ? ` (line ${parseInt(lineMatch[1]) - 2}, col ${lineMatch[2]})` : '';
+                errorEl.textContent = `${e.constructor.name}: ${e.message}${location}`;
+                errorEl.classList.remove('hidden');
+                els.testOutputJson.value = '';
+                els.testOutputLines.innerHTML = '';
             }
         }
 
-        // --- Init Events ---
+        function buildExportConfig() {
+            return {
+                version: 1,
+                sourceSchema: state.sourceJson,
+                targetSchema: state.targetJson,
+                mappings: state.mappings.map(({ source, target, sourceType, targetType }) => ({
+                    source, target,
+                    sourceType: sourceType || 'unknown',
+                    targetType: targetType || 'unknown'
+                })),
+                jsCode: state.sandboxCode
+            };
+        }
+
+        let _exportJson = '';
+
+        function syntaxHighlightJson(json) {
+            return json
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+                    let color = '#b5cea8'; // number
+                    if (/^"/.test(match)) {
+                        color = /:$/.test(match) ? '#9cdcfe' : '#ce9178'; // key : string
+                    } else if (/true|false/.test(match)) {
+                        color = '#569cd6'; // boolean
+                    } else if (/null/.test(match)) {
+                        color = '#569cd6'; // null
+                    }
+                    return `<span style="color:${color}">${match}</span>`;
+                });
+        }
+
+        function handleExportConfig() {
+            if (state.mappings.length === 0 && !state.sourceJson && !state.targetJson) {
+                showToast('Nothing to export yet.');
+                return;
+            }
+            _exportJson = JSON.stringify(buildExportConfig(), null, 2);
+
+            document.getElementById('export-modal-highlighted').innerHTML = syntaxHighlightJson(_exportJson);
+
+            const lines = _exportJson.split('\n');
+            document.getElementById('export-modal-lines').innerHTML = lines.map((_, i) => `<div>${i + 1}</div>`).join('');
+            document.getElementById('export-modal-meta').textContent =
+                `${state.mappings.length} mapping${state.mappings.length !== 1 ? 's' : ''} · ${(new Blob([_exportJson]).size / 1024).toFixed(1)} KB`;
+
+            const modal = document.getElementById('export-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            lucide.createIcons({ root: modal });
+        }
+
+        function closeExportModal() {
+            const modal = document.getElementById('export-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function downloadExportConfig() {
+            const blob = new Blob([_exportJson], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'mapping-config.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            closeExportModal();
+            showToast('Config downloaded as mapping-config.json');
+        }
+
         document.querySelectorAll('#source-tabs .tab-btn').forEach(btn => {
             btn.addEventListener('click', () => switchTab('source', btn.dataset.tab));
         });
@@ -788,12 +814,14 @@
             btn.addEventListener('click', () => switchTab('center', btn.dataset.tab));
         });
 
-        // Add synced scroll to readonly outputs
-        els.outputJson.addEventListener('scroll', () => { els.outputLines.scrollTop = els.outputJson.scrollTop; });
-        els.configJson.addEventListener('scroll', () => { els.configLines.scrollTop = els.configJson.scrollTop; });
         els.testOutputJson.addEventListener('scroll', () => { els.testOutputLines.scrollTop = els.testOutputJson.scrollTop; });
+        document.getElementById('export-modal-code').addEventListener('scroll', function() {
+            document.getElementById('export-modal-lines').scrollTop = this.scrollTop;
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeExportModal(); });
 
-        // Initial setup
+        autoParse('source');
+        autoParse('target');
         lucide.createIcons();
     </script>
 </body>
