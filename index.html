@@ -22,6 +22,89 @@
         .font-mono {
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
+        .panel-resizer {
+            width: 12px;
+            flex-shrink: 0;
+            cursor: col-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 10;
+            user-select: none;
+        }
+        .panel-resizer::after {
+            content: '';
+            width: 3px;
+            height: 28px;
+            background: #d1d5db;
+            border-radius: 3px;
+            transition: background 0.15s, height 0.15s, width 0.15s;
+        }
+        .panel-resizer:hover::after,
+        .panel-resizer.dragging::after {
+            background: #3b82f6;
+            height: 44px;
+            width: 3px;
+        }
+        body.resizing-panels {
+            cursor: col-resize !important;
+            user-select: none !important;
+        }
+        body.resizing-panels * {
+            pointer-events: none !important;
+        }
+        body.resizing-panels .panel-resizer {
+            pointer-events: auto !important;
+        }
+        .row-resizer {
+            height: 10px;
+            flex-shrink: 0;
+            cursor: row-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 10;
+            user-select: none;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .row-resizer::after {
+            content: '';
+            height: 3px;
+            width: 28px;
+            background: #d1d5db;
+            border-radius: 3px;
+            transition: background 0.15s, width 0.15s;
+        }
+        .row-resizer:hover::after,
+        .row-resizer.dragging::after {
+            background: #3b82f6;
+            width: 44px;
+        }
+        body.resizing-rows {
+            cursor: row-resize !important;
+            user-select: none !important;
+        }
+        body.resizing-rows * {
+            pointer-events: none !important;
+        }
+        body.resizing-rows .row-resizer {
+            pointer-events: auto !important;
+        }
+        /* Grid split: code | toolbar | drag handle | output — minmax(0,1fr) fills available height */
+        #center-sandbox-view {
+            width: 100%;
+            height: 100%;
+            grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 1fr);
+            grid-template-columns: minmax(0, 1fr);
+        }
+        #center-sandbox-view > #sandbox-code-section,
+        #center-sandbox-view > #sandbox-output-section {
+            min-height: 0;
+            min-width: 0;
+        }
     </style>
 </head>
 <body class="flex flex-col h-screen bg-[#fafafa] text-gray-800 font-sans overflow-hidden">    <div id="export-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-6" onclick="if(event.target===this) closeExportModal()">
@@ -75,7 +158,7 @@
                 <span>Export Config</span>
             </button>
         </div>
-    </header>    <main class="flex-1 overflow-hidden relative p-3 pb-0 flex gap-3">        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+    </header>    <main class="flex-1 overflow-hidden relative p-3 pb-0 flex">        <div id="source-panel" class="flex-1 flex flex-col min-w-0 bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
             <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between">
                 <div class="flex items-center" id="source-tabs">
                     <button data-tab="raw" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
@@ -94,7 +177,9 @@
                     </div>
                 </div>                <div id="source-tree-view" class="absolute inset-0 hidden overflow-y-auto p-3 bg-[#fafafa]"></div>
             </div>
-        </div>        <div class="flex-[1.5] flex flex-col min-w-[400px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+        </div>
+        <div class="panel-resizer" id="resizer-1"></div>
+        <div id="center-panel" class="flex-[1.5] flex flex-col min-h-0 min-w-0 bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
             <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between z-10">
                 <div class="flex items-center" id="center-tabs">
                     <button data-tab="canvas" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
@@ -107,7 +192,7 @@
                 </div>
             </div>
             
-            <div class="flex-1 relative overflow-hidden bg-[#fafafa]">                <div id="center-canvas-view" class="absolute inset-0 flex flex-col items-center justify-center p-8 z-10">
+            <div class="flex-1 relative min-h-0 overflow-hidden bg-[#fafafa]">                <div id="center-canvas-view" class="absolute inset-0 flex flex-col items-center justify-center p-8 z-10">
                     <div id="canvas-empty-state" class="flex flex-col items-center justify-center text-center pointer-events-none transition-opacity">
                         <div class="w-16 h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center mb-4 shadow-sm">
                             <i data-lucide="git-merge" class="w-7 h-7 text-gray-400"></i>
@@ -133,17 +218,11 @@
                         </div>
                         <div id="mappings-list" class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2">                        </div>
                     </div>
-                </div>                <div id="center-sandbox-view" class="absolute inset-0 hidden flex-col relative">
-                    <div class="flex-1 flex flex-col min-h-0 border-b border-gray-200">
-                        <div class="bg-white px-3 py-1.5 flex items-center justify-between border-b border-gray-200 shrink-0 shadow-sm z-10">
-                            <div>
-                                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">JavaScript Execution Engine</span>
-                                <span class="text-[10px] text-gray-400">Auto-synced from visual mappings · edit freely</span>
-                            </div>
-                        </div>
-                        <div class="flex-1 relative bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
+                </div>                <div id="center-sandbox-view" class="absolute inset-0 hidden min-h-0 overflow-hidden relative">
+                    <div id="sandbox-code-section" class="flex flex-col min-h-0 min-w-0 border-b border-gray-200 overflow-hidden">
+                        <div class="flex-1 relative min-h-0 min-w-0 bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
                              <div id="sandbox-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
-                             <textarea id="sandbox-code" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" placeholder="// Write or load JavaScript transformation code here..." spellcheck="false" style="line-height: 21px"></textarea>
+                             <textarea id="sandbox-code" rows="1" class="flex-1 min-h-0 min-w-0 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" placeholder="// Write or load JavaScript transformation code here..." spellcheck="false" style="line-height: 21px"></textarea>
                         </div>
                     </div>
                     
@@ -153,21 +232,23 @@
                         </button>
                         <div id="sandbox-error" class="hidden text-[11px] text-rose-600 font-mono bg-rose-50 border border-rose-200 rounded px-3 py-1 max-w-full text-center"></div>
                     </div>
-                    
-                    <div class="flex-1 flex flex-col min-h-0">
+                    <div class="row-resizer" id="sandbox-row-resizer"></div>
+                    <div id="sandbox-output-section" class="flex flex-col min-h-0 min-w-0 overflow-hidden">
                         <div class="bg-white px-3 py-1.5 border-b border-gray-200 shrink-0 shadow-sm z-10 flex items-center justify-between">
                             <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Output: Generated JSON</span>
                             <span id="exec-time" class="text-[10px] text-emerald-600 font-mono"></span>
                         </div>
-                        <div class="flex-1 relative bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
+                        <div class="flex-1 relative min-h-0 min-w-0 bg-[#fafafa] flex overflow-hidden font-mono text-[13px] leading-[21px]">
                              <div id="test-output-lines" class="w-12 shrink-0 bg-gray-50 border-r border-gray-200 text-gray-400 text-right pr-3 py-4 select-none overflow-hidden"></div>
-                             <textarea id="test-output-json" class="flex-1 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" readonly placeholder="// Transformation result will appear here..." spellcheck="false" style="line-height: 21px"></textarea>
+                             <textarea id="test-output-json" rows="1" class="flex-1 min-h-0 min-w-0 p-4 resize-none focus:outline-none text-gray-800 bg-transparent whitespace-pre overflow-auto" readonly placeholder="// Transformation result will appear here..." spellcheck="false" style="line-height: 21px"></textarea>
                         </div>
                     </div>
                 </div>
 
             </div>
-        </div>        <div class="flex-1 flex flex-col min-w-[320px] bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
+        </div>
+        <div class="panel-resizer" id="resizer-2"></div>
+        <div id="target-panel" class="flex-1 flex flex-col min-w-0 bg-white relative border border-gray-200 rounded-xl overflow-hidden shadow-[0_2px_8px_-3px_rgba(0,0,0,0.05)]">
             <div class="flex bg-[#f8f9fa] border-b border-gray-200 min-h-[44px] px-1 items-center justify-between">
                 <div class="flex items-center" id="target-tabs">
                     <button data-tab="raw" class="tab-btn active flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 select-none text-gray-900 bg-white border border-gray-200 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
@@ -578,7 +659,7 @@
                 document.getElementById('center-canvas-view').classList.toggle('hidden', tabName !== 'canvas');
                 document.getElementById('center-sandbox-view').classList.toggle('hidden', tabName !== 'sandbox');
                 if (tabName === 'sandbox') {
-                    document.getElementById('center-sandbox-view').style.display = 'flex';
+                    document.getElementById('center-sandbox-view').style.display = 'grid';
                 } else {
                     document.getElementById('center-sandbox-view').style.display = '';
                 }
@@ -823,6 +904,112 @@
         autoParse('source');
         autoParse('target');
         lucide.createIcons();
+
+        (function initSandboxResizer() {
+            const sandboxRoot = document.getElementById('center-sandbox-view');
+            const resizer = document.getElementById('sandbox-row-resizer');
+            const topSection = document.getElementById('sandbox-code-section');
+            const bottomSection = document.getElementById('sandbox-output-section');
+
+            function applyProportionalGridRows(topPx, bottomPx) {
+                const total = topPx + bottomPx;
+                if (total <= 0) {
+                    sandboxRoot.style.gridTemplateRows = 'minmax(0, 1fr) auto auto minmax(0, 1fr)';
+                    return;
+                }
+                if (topPx <= 0) {
+                    sandboxRoot.style.gridTemplateRows = '0px auto auto minmax(0, 1fr)';
+                    return;
+                }
+                if (bottomPx <= 0) {
+                    sandboxRoot.style.gridTemplateRows = 'minmax(0, 1fr) auto auto 0px';
+                    return;
+                }
+                const gTop = Math.max(1, topPx);
+                const gBottom = Math.max(1, bottomPx);
+                sandboxRoot.style.gridTemplateRows = `minmax(0, ${gTop}fr) auto auto minmax(0, ${gBottom}fr)`;
+            }
+
+            resizer.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const startY = e.clientY;
+                const startTopHeight = topSection.getBoundingClientRect().height;
+                const startBottomHeight = bottomSection.getBoundingClientRect().height;
+                const totalH = startTopHeight + startBottomHeight;
+
+                resizer.classList.add('dragging');
+                document.body.classList.add('resizing-rows');
+
+                let lastTop = startTopHeight;
+                let lastBottom = startBottomHeight;
+
+                const onMouseMove = (e) => {
+                    const dy = e.clientY - startY;
+                    let newTop = startTopHeight + dy;
+                    let newBottom = startBottomHeight - dy;
+                    if (newTop < 0) { newTop = 0; newBottom = totalH; }
+                    else if (newBottom < 0) { newBottom = 0; newTop = totalH; }
+                    lastTop = newTop;
+                    lastBottom = newBottom;
+                    sandboxRoot.style.gridTemplateRows = `${newTop}px auto auto ${newBottom}px`;
+                };
+
+                const onMouseUp = () => {
+                    applyProportionalGridRows(lastTop, lastBottom);
+                    resizer.classList.remove('dragging');
+                    document.body.classList.remove('resizing-rows');
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        })();
+
+        (function initPanelResizers() {
+            const panels = [
+                document.getElementById('source-panel'),
+                document.getElementById('center-panel'),
+                document.getElementById('target-panel')
+            ];
+
+            document.querySelectorAll('.panel-resizer').forEach((resizer, i) => {
+                const leftPanel = panels[i];
+                const rightPanel = panels[i + 1];
+
+                resizer.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    const startX = e.clientX;
+                    const startLeftWidth = leftPanel.getBoundingClientRect().width;
+                    const startRightWidth = rightPanel.getBoundingClientRect().width;
+                    const totalW = startLeftWidth + startRightWidth;
+
+                    resizer.classList.add('dragging');
+                    document.body.classList.add('resizing-panels');
+
+                    const onMouseMove = (e) => {
+                        const dx = e.clientX - startX;
+                        let newLeft = startLeftWidth + dx;
+                        let newRight = startRightWidth - dx;
+                        if (newLeft < 0) { newLeft = 0; newRight = totalW; }
+                        else if (newRight < 0) { newRight = 0; newLeft = totalW; }
+                        leftPanel.style.flex = `0 0 ${newLeft}px`;
+                        rightPanel.style.flex = `0 0 ${newRight}px`;
+                    };
+
+                    const onMouseUp = () => {
+                        resizer.classList.remove('dragging');
+                        document.body.classList.remove('resizing-panels');
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.removeEventListener('mouseup', onMouseUp);
+                    };
+
+                    document.addEventListener('mousemove', onMouseMove);
+                    document.addEventListener('mouseup', onMouseUp);
+                });
+            });
+        })();
     </script>
 </body>
 </html>
